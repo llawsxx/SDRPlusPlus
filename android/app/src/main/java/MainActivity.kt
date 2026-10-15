@@ -13,11 +13,13 @@ import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.hardware.usb.*;
 import android.Manifest;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Build;
 import android.net.Uri;
 import android.provider.DocumentsContract;
 import android.view.KeyEvent;
+import android.view.View;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.util.Log;
@@ -25,6 +27,7 @@ import android.content.res.AssetManager;
 
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
@@ -250,7 +253,7 @@ class MainActivity : NativeActivity() {
         } else {
             window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
         }
-        WindowCompat.setDecorFitsSystemWindows(window, true);
+        WindowCompat.setDecorFitsSystemWindows(window, Build.VERSION.SDK_INT < 35);
         window.attributes = window.attributes.apply {
             layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER;
         };
@@ -266,15 +269,29 @@ class MainActivity : NativeActivity() {
         };
     }
 
+    private fun configureWindowInsets() {
+        if (Build.VERSION.SDK_INT < 35) { return; }
+        val content = findViewById<View>(android.R.id.content);
+        content.setBackgroundColor(Color.BLACK);
+        ViewCompat.setOnApplyWindowInsetsListener(content) { view, windowInsets ->
+            val safeArea = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars() or
+                WindowInsetsCompat.Type.displayCutout() or WindowInsetsCompat.Type.ime());
+            view.setPadding(safeArea.left, safeArea.top, safeArea.right, safeArea.bottom);
+            WindowInsetsCompat.CONSUMED;
+        };
+        ViewCompat.requestApplyInsets(content);
+    }
+
     public override fun onCreate(savedInstanceState: Bundle?) {
         // Hide bars
         hideSystemBars();
 
-        // Ask for required permissions, without these the app cannot run.
-        checkAndAsk(Manifest.permission.WRITE_EXTERNAL_STORAGE);
-        checkAndAsk(Manifest.permission.READ_EXTERNAL_STORAGE);
-
-        // TODO: Have the main code wait until these two permissions are available
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
+            checkAndAsk(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        }
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2) {
+            checkAndAsk(Manifest.permission.READ_EXTERNAL_STORAGE);
+        }
 
         // Register events
         usbManager = getSystemService(Context.USB_SERVICE) as UsbManager;
@@ -289,10 +306,8 @@ class MainActivity : NativeActivity() {
         val devList = usbManager!!.getDeviceList();
         for (device in devList.values) { requestUsbPermission(device); }
 
-        // Ask for internet permission
-        checkAndAsk(Manifest.permission.INTERNET);
-
         super.onCreate(savedInstanceState)
+        configureWindowInsets();
         hideSystemBars();
     }
 

@@ -34,7 +34,12 @@ required for native compilation.
 
 The signed debug APK is `app/build/outputs/apk/debug/app-debug.apk`.
 Release builds still require your own release signing configuration.
-The minimum and target SDK remain 28 to preserve existing app behavior.
+The minimum SDK is 28 (Android 9); the compile and target SDK are 36.
+Release lint remains enabled without a baseline or target-SDK suppression.
+Android 15 and newer use explicit window insets to keep the native UI clear of
+the status bar and display cutouts. Legacy storage permissions are only requested
+on older Android versions; recording to shared storage uses the system folder
+picker instead.
 
 ## Native dependencies
 

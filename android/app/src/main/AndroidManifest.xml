@@ -13,8 +13,10 @@
             android:theme="@android:style/Theme.NoTitleBar"
             android:exported="true"
             android:launchMode="singleTask"
+            android:enableOnBackInvokedCallback="false"
             android:configChanges="orientation|keyboardHidden|screenSize">
             <meta-data android:name="android.app.lib_name" android:value="sdrpp_core" />
+            <property android:name="android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY" android:value="true" />
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -27,8 +29,8 @@
         </activity>
     </application>
 
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 </manifest>
