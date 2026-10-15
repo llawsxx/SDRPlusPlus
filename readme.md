@@ -69,6 +69,13 @@ Download the app bundle from the latest [nightly build](https://www.sdrpp.org/ni
 
 There are currently no BSD packages, refer to [Building on Linux / BSD](https://github.com/AlexandreRouma/SDRPlusPlus#building-on-linux--bsd) for instructions on building from source.
 
+# Building for Android
+
+Open the `android` directory in Android Studio and build the `app` module.
+Native dependencies are downloaded, checksum-verified and built automatically;
+Docker and a separate SDR kit are not required. See [the Android build guide](android/README.md)
+for SDK versions, command-line builds and ABI selection.
+
 # Building on Windows
 
 The preferred IDE is [VS Code](https://code.visualstudio.com/) in order to have similar development experience across platforms and to build with CMake using the command line.

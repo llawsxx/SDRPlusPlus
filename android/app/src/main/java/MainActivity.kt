@@ -147,7 +147,7 @@ class MainActivity : NativeActivity() {
     }
 
     public fun extractDir(aman: AssetManager, local: String, rsrc: String): Int {
-        val flist = aman.list(rsrc);
+        val flist = aman.list(rsrc) ?: emptyArray();
         var ecount = 0;
         for (fp in flist) {
             val lpath = local + "/" + fp;

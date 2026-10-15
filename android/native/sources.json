@@ -1,0 +1,62 @@
+{
+  "zstd": {
+    "url": "https://codeload.github.com/facebook/zstd/tar.gz/refs/tags/v1.5.2",
+    "sha256": "f7de13462f7a82c29ab865820149e778cbfe01087b3a55b5332707abf9db4a6e"
+  },
+  "fftw": {
+    "url": "https://www.fftw.org/fftw-3.3.10.tar.gz",
+    "sha256": "56c932549852cddcfafdab3820b0200c7742675be92179e59e6215b340e26467"
+  },
+  "volk": {
+    "url": "https://codeload.github.com/gnuradio/volk/tar.gz/refs/tags/v2.5.2",
+    "sha256": "fb447b8053f574a72697a26f08d51fb70d3b54b4e90e72b705138f8bc7ae6722"
+  },
+  "libusb": {
+    "url": "https://github.com/libusb/libusb/releases/download/v1.0.25/libusb-1.0.25.tar.bz2",
+    "sha256": "8a28ef197a797ebac2702f095e81975e2b02b2eeff2774fa909c78a74ef50849"
+  },
+  "airspy": {
+    "url": "https://codeload.github.com/airspy/airspyone_host/tar.gz/fc61ab6be57ed61f0e2bdd9c6dfae74cacef57d0",
+    "sha256": "5318d8c9dfb1e84b424b6f33d027dc8501ee18db83e5e7519207ecda130d5afd"
+  },
+  "airspyhf": {
+    "url": "https://codeload.github.com/airspy/airspyhf/tar.gz/24fe8ffcb00b14f827268bbad89ae1392de055e5",
+    "sha256": "9047a07b6f17c25837be2d35bacf3470db2ae026b47746fca3e427507cd283d1"
+  },
+  "hydrasdr": {
+    "url": "https://codeload.github.com/hydrasdr/rfone_host/tar.gz/16942cbcbde47198abc6b7968c700ed0cbb8cc87",
+    "sha256": "2623ad63798f59eca4f9956c18e197598c5b6dc452e139f2c028854e6b813020"
+  },
+  "hackrf": {
+    "url": "https://codeload.github.com/AlexandreRouma/hackrf/tar.gz/b1275e9c240b64cd7a8fd9bac70d77a8dd957616",
+    "sha256": "212962a94042775d0f4829dd6e7dacbf50c7f529bacd2ea724c8ba38fb300bdb"
+  },
+  "rtlsdr": {
+    "url": "https://codeload.github.com/AlexandreRouma/rtl-sdr/tar.gz/ddd6811b71359c299cf31b4e3e75fbb1ed5c964d",
+    "sha256": "dc6e8b1a3125c927df407dfdb435be709fbf4d4d2e8b27c8b50a4134c034fa2e"
+  },
+  "codec2": {
+    "url": "https://codeload.github.com/drowe67/codec2-dev/tar.gz/refs/tags/v1.0.5",
+    "sha256": "92cce3e43c59644c05431cac83f969f1deecd6b3b6da2cd6020fb31239b45b7a"
+  },
+  "libxml2": {
+    "url": "https://codeload.github.com/GNOME/libxml2/tar.gz/refs/tags/v2.9.14",
+    "sha256": "77e7c7240ce447582d2c3471f050423c01ec0e201c3bf2fd6731064d1891f362"
+  },
+  "libiio": {
+    "url": "https://codeload.github.com/analogdevicesinc/libiio/tar.gz/refs/tags/v0.24",
+    "sha256": "a2b5d848531ea64fd9f95327dfd5a588bd227d9577281ec375e822702c6a52d5"
+  },
+  "libad9361": {
+    "url": "https://codeload.github.com/analogdevicesinc/libad9361-iio/tar.gz/refs/tags/v0.2",
+    "sha256": "f0d935eb7f70fde8596d98e9eb1f311b408b87662fc1fff45ae3ed455697b747"
+  },
+  "mako": {
+    "url": "https://files.pythonhosted.org/packages/9e/38/bd5b78a920a64d708fe6bc8e0a2c075e1389d53bef8413725c63ba041535/mako-1.3.10.tar.gz",
+    "sha256": "99579a6f39583fa7e5630a28c3c1f440e4e97a414b80372649c0ce338da2ea28"
+  },
+  "markupsafe": {
+    "url": "https://files.pythonhosted.org/packages/7e/99/7690b6d4034fffd95959cbe0c02de8deb3098cc577c67bb6a24fe5d7caa7/markupsafe-3.0.3.tar.gz",
+    "sha256": "722695808f4b6457b320fdc131280796bdceb04ab50fe1795cd540799ebe1698"
+  }
+}

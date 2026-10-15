@@ -15,11 +15,11 @@ if (MSVC)
     target_link_libraries(dab_decoder PRIVATE libcodec2)
 elseif (ANDROID)
     target_include_directories(dab_decoder PUBLIC
-        /sdr-kit/${ANDROID_ABI}/include/codec2
+        "${SDRPP_ANDROID_DEPS_ROOT}/include/codec2"
     )
 
     target_link_libraries(dab_decoder PUBLIC
-        /sdr-kit/${ANDROID_ABI}/lib/libcodec2.so
+        sdrpp_android::codec2
     )
 else ()
     find_package(PkgConfig)

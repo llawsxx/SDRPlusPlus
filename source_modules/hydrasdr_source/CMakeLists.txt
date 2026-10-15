@@ -13,12 +13,12 @@ if (MSVC)
     target_link_libraries(hydrasdr_source PRIVATE hydrasdr)
 elseif (ANDROID)
     target_include_directories(hydrasdr_source PUBLIC
-    /sdr-kit/${ANDROID_ABI}/include/libhydrasdr
+    "${SDRPP_ANDROID_DEPS_ROOT}/include/libhydrasdr"
     )
 
     target_link_libraries(hydrasdr_source PUBLIC
-    /sdr-kit/${ANDROID_ABI}/lib/libusb1.0.so
-    /sdr-kit/${ANDROID_ABI}/lib/libhydrasdr.so
+    sdrpp_android::usb
+    sdrpp_android::hydrasdr
 )
 else (MSVC)
     find_package(PkgConfig)

@@ -118,6 +118,7 @@ if (ANDROID)
     set(CMAKE_C_STANDARD 11)
     set(CMAKE_CXX_STANDARD 14)
     set(CMAKE_CXX14_EXTENSION_COMPILE_OPTION "-std=c++17")
+    include("${CMAKE_CURRENT_SOURCE_DIR}/android/cmake/dependencies.cmake")
 endif (ANDROID)
 
 # Core of SDR++

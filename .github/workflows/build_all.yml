@@ -587,20 +587,20 @@ jobs:
         steps:
         - uses: actions/checkout@v4
 
-        - name: Fetch container
-          working-directory: ${{runner.workspace}}
-          run: git clone https://github.com/AlexandreRouma/android-sdr-kit
-        
-        - name: Build container
-          working-directory: ${{runner.workspace}}/android-sdr-kit
-          run: docker build --progress=plain -t android-sdr-kit .
+        - uses: actions/setup-java@v4
+          with:
+              distribution: temurin
+              java-version: '17'
+
+        - name: Install Android native build tools
+          run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "ndk;28.2.13676358" "cmake;3.22.1"'
 
         - name: Build
-          run: docker run --name build -v $GITHUB_WORKSPACE:/root/SDRPlusPlus android-sdr-kit /bin/bash -l -c "cd /root/SDRPlusPlus/android && gradle --info assembleDebug"
+          working-directory: android
+          run: bash ./gradlew --no-daemon :app:assembleDebug -Psdrpp.abis=arm64-v8a,armeabi-v7a,x86,x86_64
 
         - name: Recover APK
-          working-directory: ${{runner.workspace}}
-          run: docker cp build:/root/SDRPlusPlus/android/app/build/outputs/apk/debug/app-debug.apk ./ && mv app-debug.apk sdrpp.apk
+          run: cp android/app/build/outputs/apk/debug/app-debug.apk ${{runner.workspace}}/sdrpp.apk
 
         - name: Save APK
           uses: actions/upload-artifact@v4

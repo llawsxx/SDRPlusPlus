@@ -1,10 +1,12 @@
 apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
+
+def androidAbis = providers.gradleProperty('sdrpp.abis').getOrElse('arm64-v8a').split(',').collect { it.trim() }
+def generatedAssets = layout.buildDirectory.dir('generated/sdrppAssets')
 
 android {
-    compileSdkVersion 28
-    buildToolsVersion "30.0.3"
-    ndkVersion "25.1.8937393"
+    namespace 'org.sdrpp.sdrpp'
+    compileSdk = 36
+    ndkVersion '28.2.13676358'
     defaultConfig {
         applicationId "org.sdrpp.sdrpp"
         minSdkVersion 28
@@ -12,10 +14,26 @@ android {
         versionCode 1
         versionName "1.2.1"
 
+        ndk {
+            abiFilters.addAll(androidAbis)
+        }
+
         externalNativeBuild {
             cmake {
+                arguments '-DSDRPP_ANDROID_BUILD_DEPS=ON', '-DANDROID_STL=c++_shared'
                 arguments "-DOPT_BACKEND_GLFW=OFF", "-DOPT_BACKEND_ANDROID=ON", "-DOPT_BUILD_SOAPY_SOURCE=OFF", "-DOPT_BUILD_ANDROID_AUDIO_SINK=ON", "-DOPT_BUILD_AUDIO_SINK=OFF", "-DOPT_BUILD_DISCORD_PRESENCE=OFF", "-DOPT_BUILD_M17_DECODER=ON", "-DOPT_BUILD_PLUTOSDR_SOURCE=ON", "-DOPT_BUILD_AUDIO_SOURCE=OFF", "-DOPT_BUILD_HYDRASDR_SOURCE=ON"
             }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
         }
     }
 
@@ -40,37 +58,29 @@ android {
 
     externalNativeBuild {
         cmake {
-            version "3.18.1"
+            version '3.22.1'
             path "../../CMakeLists.txt"
         }
     }
 
     sourceSets {
         main {
-            assets.srcDirs += ['assets']
+            assets.srcDir generatedAssets.get().asFile
         }
     }
 }
 
-task deleteTempAssets (type: Delete) {
-    delete 'assets'
-}
-
-task copyResources(type: Copy) {
+def copyResources = tasks.register('copyResources', Sync) {
     description = 'Copy resources...'
     from '../../root/'
-    into 'assets/'
+    into generatedAssets
     include('**/*')
 }
 
-repositories {
-    mavenCentral()
-}
-
 dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-    implementation 'androidx.appcompat:appcompat:1.0.2'
+    implementation 'androidx.core:core:1.15.0'
 }
 
-copyResources.dependsOn deleteTempAssets
-preBuild.dependsOn copyResources
+tasks.named('preBuild').configure {
+    dependsOn copyResources
+}
