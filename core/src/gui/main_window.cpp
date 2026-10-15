@@ -82,6 +82,7 @@ void MainWindow::init() {
     gui::menu.tabbed = core::configManager.conf.value("tabbedMenu", true);
     gui::menu.selectedEntry = core::configManager.conf.value("selectedMenuTab", std::string("Source"));
     core::setScreenOrientation(static_cast<core::ScreenOrientation>(std::clamp(core::configManager.conf.value("screenOrientation", 0), 0, 2)));
+    core::setKeepScreenOn(core::configManager.conf.value("keepScreenOn", false));
 
     gui::freqSelect.init();
 
@@ -347,6 +348,7 @@ void MainWindow::draw() {
         core::setSessionLocked(sessionLocked);
     }
 #ifdef __ANDROID__
+    ImGui::SameLine();
     const auto displaySize = ImGui::GetIO().DisplaySize;
     bool portrait = displaySize.x < displaySize.y;
     ImGui::BeginDisabled(sessionLocked);
@@ -358,6 +360,15 @@ void MainWindow::draw() {
             core::configManager.conf.erase("lockOrientation");
             core::configManager.release(true);
         }
+    }
+    ImGui::EndDisabled();
+    bool keepScreenOn = core::isScreenKeptOn();
+    ImGui::BeginDisabled(sessionLocked);
+    if (ImGui::Checkbox("Keep screen on##screen", &keepScreenOn)) {
+        core::setKeepScreenOn(keepScreenOn);
+        core::configManager.acquire();
+        core::configManager.conf["keepScreenOn"] = keepScreenOn;
+        core::configManager.release(true);
     }
     ImGui::EndDisabled();
 #endif

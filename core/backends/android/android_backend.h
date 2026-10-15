@@ -18,6 +18,7 @@ namespace backend {
     int getDeviceFD(int& vid, int& pid, const std::vector<DevVIDPID>& allowedVidPids);
     void setSessionLocked(bool locked);
     void setScreenOrientation(int orientation);
+    void setKeepScreenOn(bool enabled);
     void chooseRecordingDirectory();
     std::string recordingDirectoryResult();
     bool canWriteRecordingDirectory(const std::string& uri);

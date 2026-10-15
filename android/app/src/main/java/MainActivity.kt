@@ -116,6 +116,7 @@ class MainActivity : NativeActivity() {
 
     @Volatile private var sessionLocked = false;
     @Volatile private var screenOrientation = 0;
+    @Volatile private var keepScreenOn = false;
     @Volatile private var recordingDirectoryResult = "";
     @Volatile private var recordingError = "";
 
@@ -123,11 +124,20 @@ class MainActivity : NativeActivity() {
         sessionLocked = locked;
         runOnUiThread {
             updateScreenOrientation();
-            if (sessionLocked) {
-                window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-            } else {
-                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-            }
+            updateKeepScreenOn();
+        }
+    }
+
+    fun setKeepScreenOn(enabled: Boolean) {
+        keepScreenOn = enabled;
+        runOnUiThread { updateKeepScreenOn(); }
+    }
+
+    private fun updateKeepScreenOn() {
+        if (sessionLocked || keepScreenOn) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         }
     }
 

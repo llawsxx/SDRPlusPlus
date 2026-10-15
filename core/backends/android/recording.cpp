@@ -58,6 +58,13 @@ namespace backend {
         if (method) { call.env->CallVoidMethod(app->activity->clazz, method, static_cast<jint>(orientation)); }
     }
 
+    void setKeepScreenOn(bool enabled) {
+        ActivityCall call;
+        if (!call.env || !call.activityClass) { return; }
+        auto method = call.env->GetMethodID(call.activityClass, "setKeepScreenOn", "(Z)V");
+        if (method) { call.env->CallVoidMethod(app->activity->clazz, method, static_cast<jboolean>(enabled)); }
+    }
+
     void chooseRecordingDirectory() {
         ActivityCall call;
         if (!call.env || !call.activityClass) { return; }

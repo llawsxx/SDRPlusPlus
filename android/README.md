@@ -110,7 +110,7 @@ Landscape windows place the menu on the left; portrait windows place it below
 the spectrum/waterfall. The toolbar menu button hides either layout. To use the
 old collapsible sections instead, disable **Tabbed menu** in **Display**.
 
-On Android, the button below **Lock** switches between portrait and landscape:
+On Android, the button to the right of **Lock** switches between portrait and landscape:
 **Landscape** enters landscape from portrait, and **Portrait** switches back.
 The selected orientation is remembered across restarts. Until the first manual
 selection, the app follows the system orientation policy. The old independent
@@ -119,6 +119,15 @@ orientation and disables this button; unlocking restores the selected direction.
 Rotation keeps the existing activity/native receiver alive and does not
 intentionally stop the SDR or recordings. Portrait keeps the status bar visible;
 landscape hides it, and menu placement follows the existing responsive layout.
+
+**Keep screen on**, below the Lock/orientation row, independently prevents the
+foreground app's screen from timing out. It defaults to off and is remembered
+across restarts. It does not lock tuning, playback or orientation. The main
+**Lock** still forces the screen to stay on and temporarily disables this
+checkbox; unlocking restores the independent preference. When the option is off
+and the session is unlocked, normal system screen timeout applies. This uses a
+window flag, not a background wake lock, and does not keep the display awake
+after switching to another app.
 
 The **Multi Receiver** menu adds independent demodulation and per-channel audio/IQ
 recording. Android recording directories are selected through the system folder

@@ -169,11 +169,24 @@ int main(int argumentCount, char** arguments) {
         require(core::getScreenOrientation() == core::ScreenOrientation::Automatic, "Invalid orientation changed selection");
         core::releaseTuningLock();
         require(!core::isTuningLocked(), "Capture guard was not released");
+        require(!core::isScreenKeptOn(), "Screen-on option did not default to off");
+        core::setKeepScreenOn(true);
+        require(core::isScreenKeptOn() && !core::isSessionLocked() && !core::isTuningLocked(), "Screen-on option locks radio controls");
+        core::setSessionLocked(true);
+        core::setSessionLocked(false);
+        require(core::isScreenKeptOn(), "Session unlock discarded screen-on preference");
+        core::setKeepScreenOn(false);
+        require(!core::isScreenKeptOn(), "Screen-on option did not turn off");
+        core::setSessionLocked(true);
+        core::setKeepScreenOn(false);
+        require(core::isScreenKeptOn(), "Screen-on option bypassed session lock");
+        core::setSessionLocked(false);
+        require(!core::isScreenKeptOn(), "Session unlock failed to restore screen timeout");
         if (argumentCount == 3) {
             checkReceiverGroups(output, arguments[2]);
             std::cout << "PASS: receiver group validation, rejection preserves state, locked loading, deferred restore\n";
         }
-        std::cout << "PASS: parallel audio/IQ, exact sample counts, segmentation, WAV headers, IQ order, restart, open errors, queue overflow, no-data timeout, screen orientation selection/session guards\n";
+        std::cout << "PASS: parallel audio/IQ, exact sample counts, segmentation, WAV headers, IQ order, restart, open errors, queue overflow, no-data timeout, orientation and keep-screen-on/session guards\n";
         return 0;
     } catch (const std::exception& exception) {
         std::cerr << exception.what() << '\n';

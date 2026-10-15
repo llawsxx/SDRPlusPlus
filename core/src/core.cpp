@@ -57,6 +57,7 @@ namespace core {
     }
     static std::atomic<bool> sessionLocked{false};
     static std::atomic<ScreenOrientation> screenOrientation{ScreenOrientation::Automatic};
+    static std::atomic<bool> keepScreenOn{false};
     static std::atomic<int> tuningLocks{0};
 
     bool isSessionLocked() { return sessionLocked.load(); }
@@ -68,6 +69,13 @@ namespace core {
         backend::setScreenOrientation(static_cast<int>(orientation));
 #endif
         return true;
+    }
+    bool isScreenKeptOn() { return sessionLocked.load() || keepScreenOn.load(); }
+    void setKeepScreenOn(bool enabled) {
+        keepScreenOn.store(enabled);
+#ifdef __ANDROID__
+        backend::setKeepScreenOn(enabled);
+#endif
     }
     bool isTuningLocked() { return sessionLocked.load() || tuningLocks.load() > 0; }
     void retainTuningLock() { tuningLocks.fetch_add(1); }
@@ -205,6 +213,7 @@ int sdrpp_main(int argc, char* argv[]) {
     defConfig["tabbedMenu"] = true;
     defConfig["selectedMenuTab"] = "Source";
     defConfig["screenOrientation"] = 0;
+    defConfig["keepScreenOn"] = false;
     defConfig["min"] = -120.0;
 
     // Module instances
