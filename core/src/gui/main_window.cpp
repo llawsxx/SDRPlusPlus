@@ -280,7 +280,7 @@ void MainWindow::draw() {
 
     // Handle VFO movement
     if (vfo != NULL) {
-        if (vfo->centerOffsetChanged) {
+        if (vfo->centerOffsetChanged || (gui::waterfall.selectedVFOChanged && tuningMode == tuner::TUNER_MODE_CENTER)) {
             if (tuningMode == tuner::TUNER_MODE_CENTER) {
                 tuner::tune(tuner::TUNER_MODE_CENTER, gui::waterfall.selectedVFO, gui::waterfall.getCenterFrequency() + vfo->generalOffset);
             }

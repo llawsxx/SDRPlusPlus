@@ -36,6 +36,14 @@ including the original Radio, are suppressed only for monitoring; their recordin
 taps are upstream of monitoring volume. Thus solo/mute does not remove samples
 from a recording. With no managed channels, normal output routing is restored.
 
+Center tuning follows only the selected VFO, including when changing the
+selection. Retuning its frequency compensates the offsets of other VFOs so their
+absolute frequencies and bandwidths stay unchanged. Updating an unselected VFO
+does not recenter the view. When all passbands cannot fit around the requested
+center, the capture center and view are constrained to preserve the other
+channels; a frequency that cannot coexist in the shared capture is rejected.
+Session and recording tuning locks still prevent retuning.
+
 ## Record each channel
 
 On Android, press **...** beside the directory to open the system directory

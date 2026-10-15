@@ -3,14 +3,57 @@
 #include <gui/tuner.h>
 #include <string>
 #include <core.h>
+#include <algorithm>
+#include <cmath>
+#include <limits>
+#include <vector>
 
 namespace tuner {
 
     void centerTuning(std::string vfoName, double freq) {
-        if (core::isTuningLocked()) { return; }
+        if (core::isTuningLocked() || !std::isfinite(freq) || freq < 0) { return; }
         if (vfoName != "") {
-            if (gui::waterfall.vfos.find(vfoName) == gui::waterfall.vfos.end()) { return; }
-            sigpath::vfoManager.setOffset(vfoName, 0);
+            auto selected = gui::waterfall.vfos.find(vfoName);
+            if (selected == gui::waterfall.vfos.end()) { return; }
+            double previousCenter = gui::waterfall.getCenterFrequency();
+            if (vfoName != gui::waterfall.selectedVFO) {
+                sigpath::vfoManager.setOffset(vfoName, freq - previousCenter);
+                return;
+            }
+            double halfBandwidth = gui::waterfall.getBandwidth() / 2;
+            double minimumCenter = 0;
+            double maximumCenter = std::numeric_limits<double>::infinity();
+            std::vector<std::pair<std::string, double>> frequencies;
+            for (const auto& [name, channel] : gui::waterfall.vfos) {
+                double frequency = name == vfoName ? freq : previousCenter + channel->generalOffset;
+                double centerAdjustment = channel->centerOffset - channel->generalOffset;
+                minimumCenter = std::max({minimumCenter,
+                    frequency + channel->upperOffset - channel->generalOffset - halfBandwidth,
+                    frequency + centerAdjustment - channel->maxCenterOffset});
+                maximumCenter = std::min({maximumCenter,
+                    frequency + channel->lowerOffset - channel->generalOffset + halfBandwidth,
+                    frequency + centerAdjustment - channel->minCenterOffset});
+                frequencies.emplace_back(name, frequency);
+            }
+            if (minimumCenter > maximumCenter) {
+                gui::freqSelect.setFrequency(previousCenter + selected->second->generalOffset);
+                return;
+            }
+            double center = std::clamp(freq, minimumCenter, maximumCenter);
+            for (const auto& [name, frequency] : frequencies) {
+                sigpath::vfoManager.setOffset(name, frequency - center);
+            }
+            gui::waterfall.setCenterFrequency(center);
+            gui::waterfall.setViewOffset(selected->second->generalOffset);
+            gui::freqSelect.setFrequency(center + selected->second->generalOffset);
+            if (center != previousCenter) { sigpath::sourceManager.tune(center); }
+            core::configManager.acquire();
+            core::configManager.conf["frequency"] = center;
+            for (const auto& [name, channel] : gui::waterfall.vfos) {
+                core::configManager.conf["vfoOffsets"][name] = channel->generalOffset;
+            }
+            core::configManager.release(true);
+            return;
         }
         double BW = gui::waterfall.getBandwidth();
         double viewBW = gui::waterfall.getViewBandwidth();
