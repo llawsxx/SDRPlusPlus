@@ -10,7 +10,7 @@
         <activity
             android:name="org.sdrpp.sdrpp.MainActivity"
             android:icon="@mipmap/ic_launcher"
-            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:theme="@android:style/Theme.NoTitleBar"
             android:configChanges="orientation|keyboardHidden|screenSize">
             <meta-data android:name="android.app.lib_name" android:value="sdrpp_core" />
 

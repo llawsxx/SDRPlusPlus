@@ -9,16 +9,20 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.hardware.usb.*;
 import android.Manifest;
 import android.os.Bundle;
-import android.view.View;
 import android.view.KeyEvent;
+import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.util.Log;
 import android.content.res.AssetManager;
 
 import androidx.core.app.ActivityCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import androidx.core.content.PermissionChecker;
 
@@ -68,9 +72,26 @@ class MainActivity : NativeActivity() {
     }
 
     public fun hideSystemBars() {
-        val decorView = getWindow().getDecorView();
-        val uiOptions = View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
-        decorView.setSystemUiVisibility(uiOptions);
+        val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE;
+        if (isLandscape) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        }
+        WindowCompat.setDecorFitsSystemWindows(window, true);
+        window.attributes = window.attributes.apply {
+            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER;
+        };
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE;
+            isAppearanceLightStatusBars = false;
+            if (isLandscape) {
+                hide(WindowInsetsCompat.Type.statusBars());
+            } else {
+                show(WindowInsetsCompat.Type.statusBars());
+            }
+            hide(WindowInsetsCompat.Type.navigationBars());
+        };
     }
 
     public override fun onCreate(savedInstanceState: Bundle?) {
@@ -99,12 +120,25 @@ class MainActivity : NativeActivity() {
         checkAndAsk(Manifest.permission.INTERNET);
 
         super.onCreate(savedInstanceState)
+        hideSystemBars();
     }
 
     public override fun onResume() {
+        super.onResume();
         // Hide bars again
         hideSystemBars();
-        super.onResume();
+    }
+
+    public override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            hideSystemBars();
+        }
+    }
+
+    public override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig);
+        hideSystemBars();
     }
 
     fun showSoftInput() {
