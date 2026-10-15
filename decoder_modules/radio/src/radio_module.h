@@ -125,16 +125,19 @@ public:
         afChain.start();
 
         // Start stream, the rest was started when selecting the demodulator
-        stream.start();
+        if (selectedDemodID != RADIO_DEMOD_FREE) { stream.start(); }
 
         // Register the menu
         gui::menu.registerEntry(name, menuHandler, this, this);
 
         // Register the module interface
         core::modComManager.registerInterface("radio", name, moduleInterfaceHandler, this);
+        frameHandler = EventHandler<int>(frame, this);
+        core::onFrame.bindHandler(&frameHandler);
     }
 
     ~RadioModule() {
+        core::onFrame.unbindHandler(&frameHandler);
         core::modComManager.unregisterInterface(name);
         gui::menu.removeEntry(name);
         stream.stop();
@@ -184,6 +187,7 @@ public:
         RADIO_DEMOD_CW,
         RADIO_DEMOD_LSB,
         RADIO_DEMOD_RAW,
+        RADIO_DEMOD_FREE,
         _RADIO_DEMOD_COUNT,
     };
 
@@ -225,6 +229,9 @@ private:
             _this->selectDemodByID(RADIO_DEMOD_RAW);
         };
         ImGui::Columns(1, CONCAT("EndRadioModeColumns##_", _this->name), false);
+        if (ImGui::RadioButton(CONCAT("Free (IQ only)##_", _this->name), _this->selectedDemodID == RADIO_DEMOD_FREE) && _this->selectedDemodID != RADIO_DEMOD_FREE) {
+            _this->selectDemodByID(RADIO_DEMOD_FREE);
+        }
 
         ImGui::EndGroup();
 
@@ -375,6 +382,7 @@ private:
             case DemodID::RADIO_DEMOD_CW:   demod = new demod::CW();  break;
             case DemodID::RADIO_DEMOD_LSB:  demod = new demod::LSB(); break;
             case DemodID::RADIO_DEMOD_RAW:  demod = new demod::RAW(); break;
+            case DemodID::RADIO_DEMOD_FREE: demod = new demod::Free(); break;
             default:                        demod = NULL;             break;
         }
         if (!demod) { return NULL; }
@@ -409,7 +417,9 @@ private:
             return;
         }
         selectedDemodID = id;
+        if (id == RADIO_DEMOD_FREE) { stream.stop(); }
         selectDemod(demod);
+        if (id != RADIO_DEMOD_FREE) { stream.start(); }
 
         // Save config
         config.acquire();
@@ -516,6 +526,8 @@ private:
 
         // Configure VFO
         if (vfo) {
+            vfo->wtfVFO->minCenterOffset = -std::numeric_limits<double>::infinity();
+            vfo->wtfVFO->maxCenterOffset = std::numeric_limits<double>::infinity();
             vfo->setBandwidthLimits(minBandwidth, maxBandwidth, selectedDemod->getBandwidthLocked());
             vfo->setReference(selectedDemod->getVFOReference());
             vfo->setSnapInterval(snapInterval);
@@ -567,21 +579,40 @@ private:
 
     void setBandwidth(double bw) {
         if (core::isTuningLocked()) { return; }
+        if (!std::isfinite(bw)) { return; }
+        if (selectedDemodID == RADIO_DEMOD_FREE) {
+            maxBandwidth = std::max(1.0, sigpath::iqFrontEnd.getSampleRate());
+        }
         bw = std::clamp<double>(bw, minBandwidth, maxBandwidth);
         bandwidth = bw;
         if (!selectedDemod) { return; }
-        vfo->setBandwidth(bandwidth);
         selectedDemod->setBandwidth(bandwidth);
+        if (selectedDemodID == RADIO_DEMOD_FREE) {
+            clampFreeOffset();
+            vfo->setBandwidthLimits(minBandwidth, maxBandwidth, false);
+            vfo->setSampleRate(selectedDemod->getIFSampleRate(), bandwidth);
+        }
+        else { vfo->setBandwidth(bandwidth); }
 
         config.acquire();
         config.conf[name][selectedDemod->getName()]["bandwidth"] = bandwidth;
         config.release(true);
     }
 
+    void clampFreeOffset() {
+        double limit = std::max(0.0, (sigpath::iqFrontEnd.getSampleRate() - bandwidth) / 2);
+        vfo->wtfVFO->minCenterOffset = -limit;
+        vfo->wtfVFO->maxCenterOffset = limit;
+        double offset = vfo->wtfVFO->centerOffset;
+        double bounded = std::clamp(offset, -limit, limit);
+        if (bounded != offset) { vfo->setCenterOffset(bounded); }
+    }
+
     void setAudioSampleRate(double sr) {
         audioSampleRate = sr;
         if (!selectedDemod) { return; }
         selectedDemod->AFSampRateChanged(audioSampleRate);
+        if (selectedDemodID == RADIO_DEMOD_FREE) { return; }
         if (!postProcEnabled && vfo) {
             // If postproc is disabled, IF SR = AF SR
             minBandwidth = selectedDemod->getMinBandwidth();
@@ -770,6 +801,16 @@ private:
         _this->setBandwidth(newBw);
     }
 
+    static void frame(int, void* context) {
+        auto* radio = static_cast<RadioModule*>(context);
+        if (!radio->enabled || !radio->vfo || radio->selectedDemodID != RADIO_DEMOD_FREE || core::isTuningLocked()) { return; }
+        if (radio->freeInputRate != sigpath::iqFrontEnd.getSampleRate()) {
+            radio->freeInputRate = sigpath::iqFrontEnd.getSampleRate();
+            radio->setBandwidth(radio->bandwidth);
+        }
+        else { radio->clampFreeOffset(); }
+    }
+
     static void sampleRateChangeHandler(float sampleRate, void* ctx) {
         RadioModule* _this = (RadioModule*)ctx;
         _this->setAudioSampleRate(sampleRate);
@@ -878,6 +919,8 @@ private:
     OptionList<int, dsp::noise_reduction::CTCSSTone> ctcssTones;
 
     double audioSampleRate = 48000.0;
+    double freeInputRate = 0;
+    EventHandler<int> frameHandler;
     float minBandwidth;
     float maxBandwidth;
     float bandwidth;

@@ -41,7 +41,7 @@ double VFOManager::VFO::getOffset() {
 void VFOManager::VFO::setCenterOffset(double offset) {
     if (core::isTuningLocked()) { return; }
     wtfVFO->setCenterOffset(offset);
-    dspVFO->setOffset(offset);
+    dspVFO->setOffset(wtfVFO->centerOffset);
 }
 
 void VFOManager::VFO::setBandwidth(double bandwidth, bool updateWaterfall) {
@@ -55,6 +55,7 @@ void VFOManager::VFO::setBandwidth(double bandwidth, bool updateWaterfall) {
 void VFOManager::VFO::setSampleRate(double sampleRate, double bandwidth) {
     if (core::isTuningLocked()) { return; }
     dspVFO->setOutSamplerate(sampleRate, bandwidth);
+    _bandwidth = bandwidth;
     wtfVFO->setBandwidth(bandwidth);
 }
 

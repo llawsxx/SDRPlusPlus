@@ -45,6 +45,7 @@ namespace dsp::channel {
         void setOutSamplerate(double outSamplerate, double bandwidth) {
             assert(base_type::_block_init);
             std::lock_guard<std::recursive_mutex> lck(base_type::ctrlMtx);
+            if (_outSamplerate == outSamplerate && _bandwidth == bandwidth) { return; }
             base_type::tempStop();
             _outSamplerate = outSamplerate;
             _bandwidth = bandwidth;

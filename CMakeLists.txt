@@ -64,6 +64,7 @@ option(OPT_BUILD_FREQUENCY_MANAGER "Build the Frequency Manager module" ON)
 option(OPT_BUILD_IQ_EXPORTER "Build the IQ Exporter module" ON)
 option(OPT_BUILD_RECORDER "Audio and baseband recorder" ON)
 option(OPT_BUILD_MULTI_RECEIVER "Multi-channel reception and recording" ON)
+option(OPT_BUILD_CONSTELLATION "IQ and PSK constellation viewer" ON)
 option(OPT_BUILD_RIGCTL_CLIENT "Rigctl client to make SDR++ act as a panadapter" ON)
 option(OPT_BUILD_RIGCTL_SERVER "Rigctl backend for controlling SDR++ with software like gpredict" ON)
 option(OPT_BUILD_SCANNER "Frequency scanner" ON)
@@ -330,6 +331,10 @@ endif (OPT_BUILD_RECORDER)
 
 if (OPT_BUILD_MULTI_RECEIVER AND OPT_BUILD_RADIO)
     add_subdirectory("misc_modules/multi_receiver")
+endif()
+
+if (OPT_BUILD_CONSTELLATION)
+    add_subdirectory("misc_modules/constellation")
 endif()
 
 if (OPT_BUILD_RIGCTL_CLIENT)

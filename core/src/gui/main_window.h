@@ -34,6 +34,8 @@ public:
     Event<bool> onPlayStateChange;
 
 private:
+    void drawMenuPanel();
+    static void drawDebugMenu(void* ctx);
     static void vfoAddedHandler(VFOManager::VFO* vfo, void* ctx);
 
     // FFT Variables

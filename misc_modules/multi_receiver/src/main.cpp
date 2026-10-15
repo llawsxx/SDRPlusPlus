@@ -19,7 +19,7 @@ SDRPP_MOD_INFO{
 };
 
 ConfigManager config;
-static const char* modeNames = "NFM\0WFM\0AM\0DSB\0USB\0CW\0LSB\0RAW\0";
+static const char* modeNames = "NFM\0WFM\0AM\0DSB\0USB\0CW\0LSB\0RAW\0Free (IQ only)\0";
 
 static double passbandCenter(double frequency, double bandwidth, int mode) {
     if (mode == RADIO_IFACE_MODE_USB) { return frequency + bandwidth / 2; }
@@ -147,7 +147,7 @@ private:
                     message = "Channel name is already used: " + channelName; return false;
                 }
                 if (!std::isfinite(frequency) || frequency < 0 || !std::isfinite(bandwidth) || bandwidth <= 0 ||
-                    !std::isfinite(iqRate) || iqRate < bandwidth || iqRate > 10000000 || mode < 0 || mode > RADIO_IFACE_MODE_RAW) {
+                    !std::isfinite(iqRate) || iqRate < bandwidth || iqRate > sampleRate || mode < 0 || mode > RADIO_IFACE_MODE_FREE) {
                     message = "Invalid channel frequency, bandwidth, IQ sample rate or mode"; return false;
                 }
                 if (std::abs(passbandCenter(frequency, bandwidth, mode) - center) + bandwidth / 2.0 > sampleRate / 2.0) {
@@ -174,6 +174,7 @@ private:
         channel->monitor = entry.value("monitor", true);
         channel->selectAudio = entry.value("audio", true);
         channel->selectIQ = entry.value("iq", false);
+        if (channel->mode == RADIO_IFACE_MODE_FREE) { channel->selectAudio = false; }
         if (core::moduleManager.createInstance(channel->name, "radio") != 0) {
             error = "Cannot create radio channel: " + channel->name; return false;
         }
@@ -225,15 +226,19 @@ private:
         channel.iqStarted = false;
         if (!gui::mainWindow.isPlaying()) { channel.error = "Start the SDR before recording"; return; }
         if (!directory.pathIsValid()) { channel.error = "Select a writable recording directory"; return; }
-        if (!channel.selectAudio && !channel.selectIQ) { channel.error = "Select Audio and/or IQ"; return; }
         if (!sigpath::vfoManager.vfoExists(channel.name)) { channel.error = "Channel has been disabled or removed"; return; }
+        channel.frequency = gui::waterfall.getCenterFrequency() + sigpath::vfoManager.getOffset(channel.name);
+        channel.bandwidth = sigpath::vfoManager.getBandwidth(channel.name);
+        core::modComManager.callInterface(channel.name, RADIO_IFACE_CMD_GET_MODE, nullptr, &channel.mode);
+        if (!channel.selectAudio && !channel.selectIQ) { channel.error = "Select Audio and/or IQ"; return; }
+        if (channel.mode == RADIO_IFACE_MODE_FREE && channel.selectAudio) { channel.error = "Free mode has no audio; select IQ recording"; return; }
         double sampleRate = sigpath::iqFrontEnd.getSampleRate();
         double offset = gui::waterfall.vfos.at(channel.name)->centerOffset;
         if (std::abs(offset) + channel.bandwidth / 2 > sampleRate / 2) {
             channel.error = "Channel is outside the SDR capture range"; return;
         }
-        if (channel.selectIQ && (!std::isfinite(channel.iqSampleRate) || channel.iqSampleRate <= channel.bandwidth || channel.iqSampleRate > sampleRate)) {
-            channel.error = "IQ sample rate must exceed channel bandwidth and not exceed source sample rate"; return;
+        if (channel.selectIQ && (!std::isfinite(channel.iqSampleRate) || channel.iqSampleRate < channel.bandwidth || channel.iqSampleRate > sampleRate)) {
+            channel.error = "IQ sample rate must cover channel bandwidth and not exceed source sample rate"; return;
         }
         auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
         std::string safeName = channel.name;
@@ -290,6 +295,7 @@ private:
         }
         std::vector<std::string> selected;
         for (const auto& channel : channels) {
+            if (channel->mode == RADIO_IFACE_MODE_FREE) { continue; }
             if ((outputMode == 0 && channel->monitor) || (outputMode == 1 && channel->name == soloName)) {
                 selected.push_back(channel->name);
             }
@@ -375,8 +381,15 @@ private:
             }
             if (sigpath::vfoManager.vfoExists(channel->name)) {
                 channel->frequency = gui::waterfall.getCenterFrequency() + sigpath::vfoManager.getOffset(channel->name);
-                channel->bandwidth = sigpath::vfoManager.getBandwidth(channel->name);
+                double actualBandwidth = sigpath::vfoManager.getBandwidth(channel->name);
+                if (channel->bandwidth != actualBandwidth || channel->iqSampleRate < actualBandwidth || channel->iqSampleRate > sigpath::iqFrontEnd.getSampleRate()) {
+                    channel->iqSampleRate = std::min(sigpath::iqFrontEnd.getSampleRate(), std::ceil(actualBandwidth * 1.25 / 1000.0) * 1000.0);
+                }
+                channel->bandwidth = actualBandwidth;
+                int previousMode = channel->mode;
                 core::modComManager.callInterface(channel->name, RADIO_IFACE_CMD_GET_MODE, nullptr, &channel->mode);
+                if (channel->mode == RADIO_IFACE_MODE_FREE) { channel->selectAudio = false; }
+                if (channel->mode != previousMode) { updateMonitor(); }
             }
             if (!channel->error.empty() && channel->error != channel->reportedError) {
                 channel->reportedError = channel->error;
@@ -450,6 +463,9 @@ private:
                     core::modComManager.callInterface(channel->name, RADIO_IFACE_CMD_GET_BANDWIDTH, nullptr, &actualBandwidth);
                     channel->bandwidth = actualBandwidth;
                     channel->iqSampleRate = std::min(sigpath::iqFrontEnd.getSampleRate(), std::ceil(actualBandwidth * 1.25 / 1000.0) * 1000.0);
+                    channel->mode = mode;
+                    if (mode == RADIO_IFACE_MODE_FREE) { channel->selectAudio = false; channel->selectIQ = true; }
+                    updateMonitor();
                 }
                 double bandwidth = channel->bandwidth;
                 if (ImGui::InputDouble("Bandwidth", &bandwidth, 1000, 10000, "%.0f")) {
@@ -463,13 +479,15 @@ private:
                 ImGui::EndDisabled();
                 if (ImGui::Checkbox("Include in mix", &channel->monitor)) { updateMonitor(); }
                 ImGui::BeginDisabled(channel->recording || core::isSessionLocked());
+                ImGui::BeginDisabled(channel->mode == RADIO_IFACE_MODE_FREE);
                 ImGui::Checkbox("Record audio", &channel->selectAudio);
+                ImGui::EndDisabled();
                 ImGui::Checkbox("Record IQ", &channel->selectIQ);
                 double iqRate = channel->iqSampleRate;
                 if (ImGui::InputDouble("IQ sample rate", &iqRate, 1000, 100000, "%.0f")) {
-                    if (std::isfinite(iqRate) && iqRate > channel->bandwidth && iqRate <= sigpath::iqFrontEnd.getSampleRate()) {
+                    if (std::isfinite(iqRate) && iqRate >= channel->bandwidth && iqRate <= sigpath::iqFrontEnd.getSampleRate()) {
                         channel->iqSampleRate = iqRate; channel->error.clear();
-                    } else { channel->error = "IQ sample rate must exceed bandwidth and not exceed source sample rate"; }
+                    } else { channel->error = "IQ sample rate must cover bandwidth and not exceed source sample rate"; }
                 }
                 ImGui::EndDisabled();
                 ImGui::BeginDisabled(!enabled || core::isSessionLocked());

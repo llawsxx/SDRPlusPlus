@@ -27,6 +27,7 @@
 #include <gui/colormaps.h>
 #include <gui/widgets/snr_meter.h>
 #include <gui/tuner.h>
+#include <gui/panel_layout.h>
 
 void MainWindow::init() {
     LoadingScreen::show("Initializing UI");
@@ -77,6 +78,10 @@ void MainWindow::init() {
     gui::menu.registerEntry("Theme", thememenu::draw, NULL);
     gui::menu.registerEntry("VFO Color", vfo_color_menu::draw, NULL);
     gui::menu.registerEntry("Module Manager", module_manager_menu::draw, NULL);
+    gui::menu.registerEntry("Debug", drawDebugMenu, this);
+    gui::menu.tabbed = core::configManager.conf.value("tabbedMenu", true);
+    gui::menu.selectedEntry = core::configManager.conf.value("selectedMenuTab", std::string("Source"));
+    core::setScreenOrientation(static_cast<core::ScreenOrientation>(std::clamp(core::configManager.conf.value("screenOrientation", 0), 0, 2)));
 
     gui::freqSelect.init();
 
@@ -258,7 +263,7 @@ void MainWindow::vfoAddedHandler(VFOManager::VFO* vfo, void* ctx) {
 }
 
 void MainWindow::draw() {
-    core::onFrame.emit(0);
+    core::onFrame.emitSnapshot(0);
     ImGui::Begin("Main", NULL, WINDOW_FLAGS);
     std::string recordingFailure = core::recordingError();
     if (!recordingFailure.empty()) {
@@ -337,9 +342,26 @@ void MainWindow::draw() {
 
     // To Bar
     bool sessionLocked = core::isSessionLocked();
+    ImGui::BeginGroup();
     if (ImGui::Checkbox("Lock##session", &sessionLocked)) {
         core::setSessionLocked(sessionLocked);
     }
+#ifdef __ANDROID__
+    const auto displaySize = ImGui::GetIO().DisplaySize;
+    bool portrait = displaySize.x < displaySize.y;
+    ImGui::BeginDisabled(sessionLocked);
+    if (ImGui::Button(portrait ? "Landscape##screen" : "Portrait##screen")) {
+        auto orientation = portrait ? core::ScreenOrientation::Landscape : core::ScreenOrientation::Portrait;
+        if (core::setScreenOrientation(orientation)) {
+            core::configManager.acquire();
+            core::configManager.conf["screenOrientation"] = static_cast<int>(orientation);
+            core::configManager.conf.erase("lockOrientation");
+            core::configManager.release(true);
+        }
+    }
+    ImGui::EndDisabled();
+#endif
+    ImGui::EndGroup();
     ImGui::SameLine();
     // ImGui::BeginChild("TopBarChild", ImVec2(0, 49.0f * style::uiScale), false, ImGuiWindowFlags_HorizontalScrollbar);
     ImVec2 btnSize(30 * style::uiScale, 30 * style::uiScale);
@@ -452,17 +474,22 @@ void MainWindow::draw() {
 
     // Handle menu resize
     ImVec2 winSize = ImGui::GetWindowSize();
+    ImVec2 panelOrigin = ImGui::GetCursorPos();
+    ImVec2 panelSpace = ImGui::GetContentRegionAvail();
+    gui::PanelLayout layout = gui::panelLayout(winSize, panelSpace, style::uiScale, showMenu, menuWidth);
     ImVec2 mousePos = ImGui::GetMousePos();
-    if (!lockWaterfallControls && showMenu) {
-        float curY = ImGui::GetCursorPosY();
+    if (!lockWaterfallControls && showMenu && !layout.portrait) {
+        ImVec2 windowPos = ImGui::GetWindowPos();
+        float divider = windowPos.x + panelOrigin.x + layout.menuSize.x;
+        float curY = windowPos.y + panelOrigin.y;
         bool click = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
         bool down = ImGui::IsMouseDown(ImGuiMouseButton_Left);
         if (grabbingMenu) {
-            newWidth = mousePos.x;
-            newWidth = std::clamp<float>(newWidth, 250, winSize.x - 250);
-            ImGui::GetForegroundDrawList()->AddLine(ImVec2(newWidth, curY), ImVec2(newWidth, winSize.y - 10), ImGui::GetColorU32(ImGuiCol_SeparatorActive));
+            newWidth = std::clamp(mousePos.x - windowPos.x - panelOrigin.x, std::min<float>(250.0f * style::uiScale, panelSpace.x * 0.4f), panelSpace.x * 0.55f);
+            float preview = windowPos.x + panelOrigin.x + newWidth;
+            ImGui::GetForegroundDrawList()->AddLine(ImVec2(preview, curY), ImVec2(preview, curY + panelSpace.y), ImGui::GetColorU32(ImGuiCol_SeparatorActive));
         }
-        if (mousePos.x >= newWidth - (2.0f * style::uiScale) && mousePos.x <= newWidth + (2.0f * style::uiScale) && mousePos.y > curY) {
+        if (std::abs(mousePos.x - divider) <= 4.0f * style::uiScale && mousePos.y > curY) {
             ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
             if (click) {
                 grabbingMenu = true;
@@ -477,87 +504,25 @@ void MainWindow::draw() {
             core::configManager.acquire();
             core::configManager.conf["menuWidth"] = menuWidth;
             core::configManager.release(true);
+            layout = gui::panelLayout(winSize, panelSpace, style::uiScale, showMenu, menuWidth);
         }
+    }
+    else {
+        grabbingMenu = false;
     }
 
     // Process menu keybinds
     displaymenu::checkKeybinds();
 
-    // Left Column
-    if (showMenu) {
-        ImGui::Columns(3, "WindowColumns", false);
-        ImGui::SetColumnWidth(0, menuWidth);
-        ImGui::SetColumnWidth(1, std::max<int>(winSize.x - menuWidth - (60.0f * style::uiScale), 100.0f * style::uiScale));
-        ImGui::SetColumnWidth(2, 60.0f * style::uiScale);
-        ImGui::BeginChild("Left Column");
-
-        if (gui::menu.draw(firstMenuRender)) {
-            core::configManager.acquire();
-            json arr = json::array();
-            for (int i = 0; i < gui::menu.order.size(); i++) {
-                arr[i]["name"] = gui::menu.order[i].name;
-                arr[i]["open"] = gui::menu.order[i].open;
-            }
-            core::configManager.conf["menuElements"] = arr;
-
-            // Update enabled and disabled modules
-            for (auto [_name, inst] : core::moduleManager.instances) {
-                if (!core::configManager.conf["moduleInstances"].contains(_name)) { continue; }
-                core::configManager.conf["moduleInstances"][_name]["enabled"] = inst.instance->isEnabled();
-            }
-
-            core::configManager.release(true);
-        }
-        if (startedWithMenuClosed) {
-            startedWithMenuClosed = false;
-        }
-        else {
-            firstMenuRender = false;
-        }
-
-        if (ImGui::CollapsingHeader("Debug")) {
-            ImGui::Text("Frame time: %.3f ms/frame", ImGui::GetIO().DeltaTime * 1000.0f);
-            ImGui::Text("Framerate: %.1f FPS", ImGui::GetIO().Framerate);
-            ImGui::Text("Center Frequency: %.0f Hz", gui::waterfall.getCenterFrequency());
-            ImGui::Text("Source name: %s", sourceName.c_str());
-            ImGui::Checkbox("Show demo window", &demoWindow);
-            ImGui::Text("ImGui version: %s", ImGui::GetVersion());
-
-            // ImGui::Checkbox("Bypass buffering", &sigpath::iqFrontEnd.inputBuffer.bypass);
-
-            // ImGui::Text("Buffering: %d", (sigpath::iqFrontEnd.inputBuffer.writeCur - sigpath::iqFrontEnd.inputBuffer.readCur + 32) % 32);
-
-            if (ImGui::Button("Test Bug")) {
-                flog::error("Will this make the software crash?");
-            }
-
-            if (ImGui::Button("Testing something")) {
-                gui::menu.order[0].open = true;
-                firstMenuRender = true;
-            }
-
-            ImGui::Checkbox("WF Single Click", &gui::waterfall.VFOMoveSingleClick);
-            ImGui::Checkbox("Lock Menu Order", &gui::menu.locked);
-
-            ImGui::Spacing();
-        }
-
+    if (showMenu && !layout.portrait) {
+        ImGui::SetCursorPos(ImVec2(panelOrigin.x + layout.menuPosition.x, panelOrigin.y + layout.menuPosition.y));
+        ImGui::BeginChild("MenuPanel", layout.menuSize, false, gui::menu.tabbed ? ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse : 0);
+        drawMenuPanel();
         ImGui::EndChild();
     }
-    else {
-        // When hiding the menu bar
-        ImGui::Columns(3, "WindowColumns", false);
-        ImGui::SetColumnWidth(0, 8 * style::uiScale);
-        ImGui::SetColumnWidth(1, winSize.x - ((8 + 60) * style::uiScale));
-        ImGui::SetColumnWidth(2, 60.0f * style::uiScale);
-    }
 
-    // Right Column
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
-    ImGui::NextColumn();
-    ImGui::PopStyleVar();
-
-    ImGui::BeginChild("Waterfall");
+    ImGui::SetCursorPos(ImVec2(panelOrigin.x + layout.waterfallPosition.x, panelOrigin.y + layout.waterfallPosition.y));
+    ImGui::BeginChild("Waterfall", layout.waterfallSize);
 
     gui::waterfall.draw();
 
@@ -623,13 +588,14 @@ void MainWindow::draw() {
         }
     }
 
-    ImGui::NextColumn();
-    ImGui::BeginChild("WaterfallControls");
+    ImGui::SetCursorPos(ImVec2(panelOrigin.x + layout.controlsPosition.x, panelOrigin.y + layout.controlsPosition.y));
+    ImGui::BeginChild("WaterfallControls", layout.controlsSize);
 
     ImGui::SetCursorPosX((ImGui::GetWindowSize().x / 2.0) - (ImGui::CalcTextSize("Zoom").x / 2.0));
     ImGui::TextUnformatted("Zoom");
     ImGui::SetCursorPosX((ImGui::GetWindowSize().x / 2.0) - 10 * style::uiScale);
-    ImVec2 wfSliderSize(20.0 * style::uiScale, 150.0 * style::uiScale);
+    float sliderHeight = std::clamp((layout.controlsSize.y - 3 * (ImGui::GetTextLineHeightWithSpacing() + 2 * ImGui::GetStyle().ItemSpacing.y)) / 3, 40.0f * style::uiScale, 150.0f * style::uiScale);
+    ImVec2 wfSliderSize(20.0 * style::uiScale, sliderHeight);
     ImGui::BeginDisabled(core::isTuningLocked());
     if (ImGui::VSliderFloat("##_7_", wfSliderSize, &bw, 1.0, 0.0, "")) {
         double factor = (double)bw * (double)bw;
@@ -678,6 +644,13 @@ void MainWindow::draw() {
     gui::waterfall.setWaterfallMin(fftMin);
     gui::waterfall.setWaterfallMax(fftMax);
 
+    if (showMenu && layout.portrait) {
+        ImGui::SetCursorPos(ImVec2(panelOrigin.x + layout.menuPosition.x, panelOrigin.y + layout.menuPosition.y));
+        ImGui::BeginChild("MenuPanel", layout.menuSize, false, gui::menu.tabbed ? ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse : 0);
+        drawMenuPanel();
+        ImGui::EndChild();
+    }
+
     ImGui::End();
 
     if (showCredits) {
@@ -687,6 +660,43 @@ void MainWindow::draw() {
     if (demoWindow) {
         ImGui::ShowDemoWindow();
     }
+}
+
+void MainWindow::drawMenuPanel() {
+    bool wasTabbed = gui::menu.tabbed;
+    if (gui::menu.draw(firstMenuRender)) {
+        core::configManager.acquire();
+        json elements = json::array();
+        for (const auto& option : gui::menu.order) {
+            elements.push_back({{"name", option.name}, {"open", option.open}});
+        }
+        core::configManager.conf["menuElements"] = elements;
+        core::configManager.conf["selectedMenuTab"] = gui::menu.selectedEntry;
+        for (const auto& [name, entry] : core::moduleManager.instances) {
+            if (!core::configManager.conf["moduleInstances"].contains(name)) { continue; }
+            core::configManager.conf["moduleInstances"][name]["enabled"] = entry.instance->isEnabled();
+        }
+        core::configManager.release(true);
+    }
+    if (startedWithMenuClosed) { startedWithMenuClosed = false; }
+    else { firstMenuRender = wasTabbed != gui::menu.tabbed; }
+}
+
+void MainWindow::drawDebugMenu(void* ctx) {
+    auto* window = static_cast<MainWindow*>(ctx);
+    ImGui::Text("Frame time: %.3f ms/frame", ImGui::GetIO().DeltaTime * 1000.0f);
+    ImGui::Text("Framerate: %.1f FPS", ImGui::GetIO().Framerate);
+    ImGui::Text("Center Frequency: %.0f Hz", gui::waterfall.getCenterFrequency());
+    ImGui::Text("Source name: %s", window->sourceName.c_str());
+    ImGui::Checkbox("Show demo window", &window->demoWindow);
+    ImGui::Text("ImGui version: %s", ImGui::GetVersion());
+    if (ImGui::Button("Test Bug")) { flog::error("Will this make the software crash?"); }
+    if (ImGui::Button("Testing something") && !gui::menu.order.empty()) {
+        gui::menu.order.front().open = true;
+        window->firstMenuRender = true;
+    }
+    ImGui::Checkbox("WF Single Click", &gui::waterfall.VFOMoveSingleClick);
+    ImGui::Checkbox("Lock Menu Order", &gui::menu.locked);
 }
 
 void MainWindow::setPlayState(bool _playing) {

@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include <algorithm>
 #include <utils/flog.h>
 
 template <class T>
@@ -28,6 +29,15 @@ public:
 
     void bindHandler(EventHandler<T>* handler) {
         handlers.push_back(handler);
+    }
+
+    void emitSnapshot(T value) {
+        auto snapshot = handlers;
+        for (auto* handler : snapshot) {
+            if (std::find(handlers.begin(), handlers.end(), handler) != handlers.end()) {
+                handler->handler(value, handler->ctx);
+            }
+        }
     }
 
     void unbindHandler(EventHandler<T>* handler) {

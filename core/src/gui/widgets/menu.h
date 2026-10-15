@@ -28,9 +28,21 @@ public:
     std::vector<MenuOption_t> order;
 
     bool locked = false;
+    bool tabbed = true;
+    std::string selectedEntry;
 
 private:
+    bool drawTabs(bool updateStates);
+    bool drawSections(bool updateStates);
     bool isInOrderList(std::string name);
+
+    bool tabGestureActive = false;
+    bool tabGestureDragged = false;
+    bool tabScrollToSelection = true;
+    float tabGestureStartX = 0;
+    float tabGestureStartY = 0;
+    float tabGestureLastX = 0;
+    float tabGestureScroll = 0;
 
     
     bool menuClicked = false;

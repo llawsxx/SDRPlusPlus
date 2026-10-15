@@ -32,6 +32,9 @@ add_library(sdrpp_core SHARED ${SRC} ${BACKEND_SRC})
 if (OPT_BUILD_MULTI_RECEIVER AND OPT_BUILD_RADIO)
     target_compile_definitions(sdrpp_core PRIVATE SDRPP_HAS_MULTI_RECEIVER)
 endif()
+if (OPT_BUILD_CONSTELLATION)
+    target_compile_definitions(sdrpp_core PRIVATE SDRPP_HAS_CONSTELLATION)
+endif()
 
 # Set compiler options
 target_compile_options(sdrpp_core PRIVATE ${SDRPP_COMPILER_FLAGS})

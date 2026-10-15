@@ -14,6 +14,7 @@ import android.content.res.Configuration;
 import android.hardware.usb.*;
 import android.Manifest;
 import android.os.Bundle;
+import android.os.Build;
 import android.net.Uri;
 import android.provider.DocumentsContract;
 import android.view.KeyEvent;
@@ -23,6 +24,7 @@ import android.util.Log;
 import android.content.res.AssetManager;
 
 import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
@@ -35,46 +37,113 @@ import java.io.*;
 private const val ACTION_USB_PERMISSION = "org.sdrpp.sdrpp.USB_PERMISSION";
 private const val RECORDING_DIRECTORY_REQUEST = 7101;
 
-private val usbReceiver = object : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
-        if (ACTION_USB_PERMISSION == intent.action) {
-            synchronized(this) {
-                var _this = context as MainActivity;
-                _this.SDR_device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
-                if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
-                    _this.SDR_conn = _this.usbManager!!.openDevice(_this.SDR_device);
-                    
-                    // Save SDR info
-                    _this.SDR_VID = _this.SDR_device!!.getVendorId();
-                    _this.SDR_PID = _this.SDR_device!!.getProductId()
-                    _this.SDR_FD = _this.SDR_conn!!.getFileDescriptor();
+class MainActivity : NativeActivity() {
+    private var usbReceiverRegistered = false;
+    private val requestedUsbDevices = mutableSetOf<String>();
+    private val supportedUsbDevices by lazy {
+        val devices = mutableSetOf<Pair<Int, Int>>();
+        resources.getXml(R.xml.usb_device_filter).use { parser ->
+            while (parser.eventType != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
+                if (parser.eventType == org.xmlpull.v1.XmlPullParser.START_TAG && parser.name == "usb-device") {
+                    devices.add(Pair(parser.getAttributeIntValue(null, "vendor-id", -1), parser.getAttributeIntValue(null, "product-id", -1)));
                 }
-                
-                // Whatever the hell this does
-                context.unregisterReceiver(this);
-
-                // Hide again the system bars
-                _this.hideSystemBars();
+                parser.next();
             }
         }
-    }
-}
+        devices;
+    };
+    private val usbReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val device = intent.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE) ?: return;
+            when (intent.action) {
+                UsbManager.ACTION_USB_DEVICE_ATTACHED -> requestUsbPermission(device);
+                UsbManager.ACTION_USB_DEVICE_DETACHED -> {
+                    requestedUsbDevices.remove(device.deviceName);
+                    if (SDR_device?.deviceName == device.deviceName) { closeUsbDevice(); }
+                }
+                ACTION_USB_PERMISSION -> {
+                    if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false) && usbManager?.hasPermission(device) == true) {
+                        openUsbDevice(device);
+                    } else { Log.w(TAG, "USB permission denied: ${device.deviceName}"); }
+                    hideSystemBars();
+                }
+            }
+        }
+    };
 
-class MainActivity : NativeActivity() {
+    private fun requestUsbPermission(device: UsbDevice) {
+        val manager = usbManager ?: return;
+        if (Pair(device.vendorId, device.productId) !in supportedUsbDevices) { return; }
+        if (manager.hasPermission(device)) { openUsbDevice(device); return; }
+        if (!requestedUsbDevices.add(device.deviceName)) { return; }
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0;
+        val permissionIntent = PendingIntent.getBroadcast(this, device.deviceId,
+            Intent(ACTION_USB_PERMISSION).setPackage(packageName), flags);
+        try { manager.requestPermission(device, permissionIntent); }
+        catch (error: Exception) {
+            requestedUsbDevices.remove(device.deviceName);
+            Log.e(TAG, "Cannot request USB permission", error);
+        }
+    }
+
+    private fun openUsbDevice(device: UsbDevice) {
+        if (SDR_device?.deviceName == device.deviceName && SDR_conn != null) { return; }
+        val manager = usbManager ?: return;
+        if (manager.deviceList[device.deviceName] == null || !manager.hasPermission(device)) { return; }
+        if (SDR_conn != null) {
+            Log.i(TAG, "Keeping the current USB device; another device was authorized: ${device.deviceName}");
+            return;
+        }
+        try {
+            val connection = manager.openDevice(device) ?: run { Log.e(TAG, "Cannot open USB device: ${device.deviceName}"); return; };
+            SDR_device = device;
+            SDR_conn = connection;
+            SDR_VID = device.vendorId;
+            SDR_PID = device.productId;
+            SDR_FD = connection.fileDescriptor;
+            Log.i(TAG, "USB device ready: ${device.deviceName}");
+        } catch (error: Exception) { Log.e(TAG, "Cannot open USB device", error); }
+    }
+
+    private fun closeUsbDevice() {
+        SDR_FD = -1;
+        SDR_VID = -1;
+        SDR_PID = -1;
+        SDR_conn?.close();
+        SDR_conn = null;
+        SDR_device = null;
+    }
+
     @Volatile private var sessionLocked = false;
+    @Volatile private var screenOrientation = 0;
     @Volatile private var recordingDirectoryResult = "";
     @Volatile private var recordingError = "";
 
     fun setSessionLocked(locked: Boolean) {
         sessionLocked = locked;
         runOnUiThread {
-            requestedOrientation = if (locked) ActivityInfo.SCREEN_ORIENTATION_LOCKED else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
-            if (locked) {
+            updateScreenOrientation();
+            if (sessionLocked) {
                 window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             } else {
                 window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             }
         }
+    }
+
+    fun setScreenOrientation(orientation: Int) {
+        if (sessionLocked || orientation !in 0..2) { return; }
+        screenOrientation = orientation;
+        runOnUiThread { updateScreenOrientation(); }
+    }
+
+    private fun updateScreenOrientation() {
+        val orientation = if (sessionLocked) ActivityInfo.SCREEN_ORIENTATION_LOCKED else when (screenOrientation) {
+            1 -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
+            2 -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
+            else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
+        };
+        if (requestedOrientation != orientation) { requestedOrientation = orientation; }
     }
 
     override fun onBackPressed() {
@@ -199,21 +268,36 @@ class MainActivity : NativeActivity() {
 
         // Register events
         usbManager = getSystemService(Context.USB_SERVICE) as UsbManager;
-        val permissionIntent = PendingIntent.getBroadcast(this, 0, Intent(ACTION_USB_PERMISSION), 0)
-        val filter = IntentFilter(ACTION_USB_PERMISSION)
-        registerReceiver(usbReceiver, filter)
+        val filter = IntentFilter(ACTION_USB_PERMISSION).apply {
+            addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
+            addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
+        };
+        ContextCompat.registerReceiver(this, usbReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
+        usbReceiverRegistered = true;
 
         // Get permission for all USB devices
         val devList = usbManager!!.getDeviceList();
-        for ((name, dev) in devList) {
-            usbManager!!.requestPermission(dev, permissionIntent);
-        }
+        for (device in devList.values) { requestUsbPermission(device); }
 
         // Ask for internet permission
         checkAndAsk(Manifest.permission.INTERNET);
 
         super.onCreate(savedInstanceState)
         hideSystemBars();
+    }
+
+    public override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (intent.action == UsbManager.ACTION_USB_DEVICE_ATTACHED) {
+            intent.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE)?.let { requestUsbPermission(it); }
+        }
+    }
+
+    public override fun onDestroy() {
+        if (usbReceiverRegistered) { unregisterReceiver(usbReceiver); usbReceiverRegistered = false; }
+        super.onDestroy();
+        closeUsbDevice();
     }
 
     public override fun onResume() {

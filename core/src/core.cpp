@@ -56,9 +56,19 @@ namespace core {
         return lastRecordingError;
     }
     static std::atomic<bool> sessionLocked{false};
+    static std::atomic<ScreenOrientation> screenOrientation{ScreenOrientation::Automatic};
     static std::atomic<int> tuningLocks{0};
 
     bool isSessionLocked() { return sessionLocked.load(); }
+    ScreenOrientation getScreenOrientation() { return screenOrientation.load(); }
+    bool setScreenOrientation(ScreenOrientation orientation) {
+        if (isSessionLocked() || (orientation != ScreenOrientation::Automatic && orientation != ScreenOrientation::Portrait && orientation != ScreenOrientation::Landscape)) { return false; }
+        screenOrientation.store(orientation);
+#ifdef __ANDROID__
+        backend::setScreenOrientation(static_cast<int>(orientation));
+#endif
+        return true;
+    }
     bool isTuningLocked() { return sessionLocked.load() || tuningLocks.load() > 0; }
     void retainTuningLock() { tuningLocks.fetch_add(1); }
     void releaseTuningLock() { tuningLocks.fetch_sub(1); }
@@ -192,6 +202,9 @@ int sdrpp_main(int argc, char* argv[]) {
     defConfig["menuElements"][7]["open"] = true;
 
     defConfig["menuWidth"] = 300;
+    defConfig["tabbedMenu"] = true;
+    defConfig["selectedMenuTab"] = "Source";
+    defConfig["screenOrientation"] = 0;
     defConfig["min"] = -120.0;
 
     // Module instances
@@ -248,6 +261,9 @@ int sdrpp_main(int argc, char* argv[]) {
     defConfig["moduleInstances"]["Network Sink"] = "network_sink";
 
     defConfig["moduleInstances"]["Radio"] = "radio";
+#ifdef SDRPP_HAS_CONSTELLATION
+    defConfig["moduleInstances"]["Constellation"] = "constellation";
+#endif
 #ifdef SDRPP_HAS_MULTI_RECEIVER
     defConfig["moduleInstances"]["Multi Receiver"] = "multi_receiver";
 #endif
@@ -351,6 +367,9 @@ int sdrpp_main(int argc, char* argv[]) {
 
     core::configManager.conf["modules"][modCount++] = "frequency_manager.so";
     core::configManager.conf["modules"][modCount++] = "recorder.so";
+#ifdef SDRPP_HAS_CONSTELLATION
+    core::configManager.conf["modules"][modCount++] = "constellation.so";
+#endif
 #ifdef SDRPP_HAS_MULTI_RECEIVER
     core::configManager.conf["modules"][modCount++] = "multi_receiver.so";
 #endif
@@ -365,6 +384,12 @@ int sdrpp_main(int argc, char* argv[]) {
             core::configManager.conf[item.key()] = defConfig[item.key()];
         }
     }
+
+#ifdef SDRPP_HAS_CONSTELLATION
+    if (!core::configManager.conf["moduleInstances"].contains("Constellation")) {
+        core::configManager.conf["moduleInstances"]["Constellation"] = defConfig["moduleInstances"]["Constellation"];
+    }
+#endif
 
     // Remove unused elements
 #ifdef SDRPP_HAS_MULTI_RECEIVER

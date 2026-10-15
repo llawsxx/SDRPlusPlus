@@ -46,7 +46,7 @@ static void checkReceiverGroups(const std::filesystem::path& output, const std::
     require(core::moduleManager.modules.count("multi_receiver") != 0, "Cannot load Multi Receiver");
     require(core::moduleManager.createInstance("Test receiver", "multi_receiver") == 0, "Cannot create Multi Receiver");
     core::moduleManager.postInit("Test receiver");
-    core::onFrame.emit(0);
+    core::onFrame.emitSnapshot(0);
     json baseline;
     core::modComManager.callInterface("Test receiver", MULTI_RECEIVER_GET_SETUP, nullptr, &baseline);
     require(baseline["channels"].empty(), "New receiver unexpectedly contains channels");
@@ -89,7 +89,7 @@ static void checkReceiverGroups(const std::filesystem::path& output, const std::
     baseline["centerFrequency"] = 100100000;
     core::modComManager.callInterface("Test receiver", MULTI_RECEIVER_LOAD_SETUP, &baseline, &error);
     require(error.empty(), "Valid setup was rejected");
-    core::onFrame.emit(0);
+    core::onFrame.emitSnapshot(0);
     core::modComManager.callInterface("Test receiver", MULTI_RECEIVER_GET_SETUP, nullptr, &unchanged);
     require(unchanged["centerFrequency"] == 100100000, "Deferred group application failed");
     core::moduleManager.deleteInstance("Test receiver");
@@ -150,18 +150,30 @@ int main(int argumentCount, char** arguments) {
         audio.stop();
         require(audio.getError().find("No samples") != std::string::npos, "No-sample recording failure was silent");
 
+        require(core::setScreenOrientation(core::ScreenOrientation::Portrait), "Cannot select portrait orientation");
+        require(core::getScreenOrientation() == core::ScreenOrientation::Portrait && !core::isSessionLocked() && !core::isTuningLocked(), "Orientation selection blocks radio controls");
         core::setSessionLocked(true);
         require(core::isSessionLocked() && core::isTuningLocked(), "Session lock failed");
+        require(!core::setScreenOrientation(core::ScreenOrientation::Landscape) && core::getScreenOrientation() == core::ScreenOrientation::Portrait, "Screen rotation bypassed session lock");
         core::retainTuningLock();
         core::setSessionLocked(false);
         require(!core::isSessionLocked() && core::isTuningLocked(), "Unlock bypassed an active capture guard");
+        require(core::getScreenOrientation() == core::ScreenOrientation::Portrait, "Session unlock discarded orientation selection");
+        require(core::setScreenOrientation(core::ScreenOrientation::Landscape), "Recording guard unexpectedly blocks screen rotation");
+        require(core::getScreenOrientation() == core::ScreenOrientation::Landscape, "Landscape selection failed");
+        core::setSessionLocked(true);
+        require(!core::setScreenOrientation(core::ScreenOrientation::Automatic), "Automatic orientation bypassed session lock");
+        core::setSessionLocked(false);
+        require(core::setScreenOrientation(core::ScreenOrientation::Automatic), "Session orientation guard not released");
+        require(!core::setScreenOrientation(static_cast<core::ScreenOrientation>(-1)), "Invalid orientation accepted");
+        require(core::getScreenOrientation() == core::ScreenOrientation::Automatic, "Invalid orientation changed selection");
         core::releaseTuningLock();
         require(!core::isTuningLocked(), "Capture guard was not released");
         if (argumentCount == 3) {
             checkReceiverGroups(output, arguments[2]);
             std::cout << "PASS: receiver group validation, rejection preserves state, locked loading, deferred restore\n";
         }
-        std::cout << "PASS: parallel audio/IQ, exact sample counts, segmentation, WAV headers, IQ order, restart, open errors, queue overflow, no-data timeout, session guards\n";
+        std::cout << "PASS: parallel audio/IQ, exact sample counts, segmentation, WAV headers, IQ order, restart, open errors, queue overflow, no-data timeout, screen orientation selection/session guards\n";
         return 0;
     } catch (const std::exception& exception) {
         std::cerr << exception.what() << '\n';

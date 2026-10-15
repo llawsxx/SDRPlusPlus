@@ -7,6 +7,20 @@ this does not turn a narrow-band receiver into a 10 MHz receiver. There is a
 
 ## Receive and monitor
 
+Each channel has one **Bandwidth** value, used both by the demodulator's channel
+filter and its independent IQ recording channelizer. Constellation analysis also
+follows that same value. IQ sample rate is a sampling-rate setting, not a second
+bandwidth setting.
+
+**Free (IQ only)** is the arbitrary-bandwidth / no-audio mode. Its width can be
+set from 1 Hz up to the available SDR capture span around the channel center;
+unlike WFM it is not capped at 250 kHz. It drains channel IQ without generating
+audio and does not start an audio output stream. Choose IQ recording for these
+channels; audio recording is disabled. Free-mode frequencies and bandwidths are
+saved in both bookmarks and channel groups. Ordinary modes retain their existing
+mode-specific bandwidth limits. Changing mode can therefore clamp the one shared
+bandwidth to the new mode's supported range.
+
 1. Select the source sample rate and start the SDR.
 2. Open **Multi Receiver**, choose **Add channel**, and set the frequency,
    bandwidth and demodulation mode for each `RX` channel. Values are in Hz.
@@ -37,8 +51,10 @@ channels. Each track has separate progress counters and a separate file series.
 - Audio is stereo PCM16 WAV at the channel's audio sample rate.
 - IQ is two-channel Float32 WAV, I followed by Q. A dedicated channelizer translates,
   filters and resamples only that channel, independently of its audio demodulator.
-- IQ sample rate must be greater than the channel bandwidth and no greater than
+- IQ sample rate must cover the channel bandwidth and be no greater than
   the source's effective sample rate. Leave some transition-band margin.
+  It is adjusted to cover a changed channel bandwidth; at the full capture width,
+  the sample rate can equal the bandwidth and there is no extra edge margin.
 - Filenames contain the channel name, tuning frequency, timestamp, track type and
   segment number. Each track rolls over before approximately 1 GiB of payload,
   avoiding the classic RIFF/WAV 4 GiB limit. Counters display payload bytes.
@@ -56,6 +72,11 @@ channels. Each track has separate progress counters and a separate file series.
 Active channel recordings hold tuning, demodulation and bandwidth settings fixed
 so recorded metadata stays consistent. Stop them before changing those settings
 or loading a different group. Directory changes apply to future recordings only.
+
+The original **Recorder** records full-band IQ rather than a selected channel.
+Its IQ recordings also hold tuning settings, including source sample rate and
+front-end decimation, until stopped. This does not change the original Recorder
+into a channel-selective IQ recorder; use Multi Receiver for that.
 
 Providers without seekable file descriptors, such as some cloud providers, are
 rejected explicitly because WAV headers require seeking. Full-device permission,

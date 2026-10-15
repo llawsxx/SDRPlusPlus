@@ -47,10 +47,11 @@ const char* demodModeList[] = {
     "USB",
     "CW",
     "LSB",
-    "RAW"
+    "RAW",
+    "Free (IQ only)"
 };
 
-const char* demodModeListTxt = "NFM\0WFM\0AM\0DSB\0USB\0CW\0LSB\0RAW\0";
+const char* demodModeListTxt = "NFM\0WFM\0AM\0DSB\0USB\0CW\0LSB\0RAW\0Free (IQ only)\0";
 
 enum {
     BOOKMARK_DISP_MODE_OFF,
@@ -406,7 +407,8 @@ private:
                 if (!bookmark.selected) { continue; }
                 entries.push_back(json{{"name", "RX " + std::to_string(++index)}, {"frequency", bookmark.frequency},
                     {"bandwidth", bookmark.bandwidth}, {"mode", bookmark.mode},
-                    {"iqSampleRate", std::ceil(bookmark.bandwidth * 1.25 / 1000.0) * 1000.0}});
+                    {"iqSampleRate", std::min(sigpath::iqFrontEnd.getSampleRate(), std::ceil(bookmark.bandwidth * 1.25 / 1000.0) * 1000.0)},
+                    {"audio", bookmark.mode != RADIO_IFACE_MODE_FREE}, {"iq", bookmark.mode == RADIO_IFACE_MODE_FREE}});
                 double center = bookmark.frequency;
                 if (bookmark.mode == RADIO_IFACE_MODE_USB) { center += bookmark.bandwidth / 2; }
                 if (bookmark.mode == RADIO_IFACE_MODE_LSB) { center -= bookmark.bandwidth / 2; }

@@ -3,6 +3,8 @@
 #include <imgui/imgui_internal.h>
 #include <gui/style.h>
 #include <core.h>
+#include <algorithm>
+#include <cmath>
 
 Menu::Menu() {
 }
@@ -26,6 +28,115 @@ void Menu::removeEntry(std::string name) {
 }
 
 bool Menu::draw(bool updateStates) {
+    return tabbed ? drawTabs(updateStates) : drawSections(updateStates);
+}
+
+bool Menu::drawTabs(bool updateStates) {
+    std::string previousEntry = selectedEntry;
+    if (items.find(selectedEntry) == items.end()) {
+        selectedEntry.clear();
+        for (const auto& option : order) {
+            if (items.find(option.name) == items.end()) { continue; }
+            selectedEntry = option.name;
+            break;
+        }
+        updateStates = true;
+    }
+    if (selectedEntry.empty()) { return previousEntry != selectedEntry; }
+
+    if (updateStates) {
+        tabScrollToSelection = true;
+        tabGestureActive = false;
+    }
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12.0f * style::uiScale, 10.0f * style::uiScale));
+    float height = ImGui::GetFrameHeight();
+    float availableWidth = ImGui::GetContentRegionAvail().x;
+    float listWidth = std::min<float>(height, availableWidth * 0.25f);
+    float spacing = std::min<float>(ImGui::GetStyle().ItemSpacing.x, availableWidth * 0.02f);
+    ImGuiWindowFlags stripFlags = ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
+    if (ImGui::BeginChild("##MenuTabs", ImVec2(std::max<float>(1.0f, availableWidth - listWidth - spacing), height), false, stripFlags)) {
+        ImVec2 mouse = ImGui::GetMousePos();
+        if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            tabGestureActive = true;
+            tabGestureDragged = false;
+            tabGestureStartX = tabGestureLastX = mouse.x;
+            tabGestureStartY = mouse.y;
+            tabGestureScroll = ImGui::GetScrollX();
+        }
+        if (tabGestureActive) {
+            float threshold = std::max<float>(ImGui::GetIO().MouseDragThreshold, 6.0f * style::uiScale);
+            float delta = mouse.x - tabGestureLastX;
+            if (!tabGestureDragged && (std::abs(mouse.x - tabGestureStartX) > threshold || std::abs(mouse.y - tabGestureStartY) > threshold)) {
+                tabGestureDragged = true;
+                delta = mouse.x - tabGestureStartX;
+            }
+            if (tabGestureDragged) {
+                tabGestureScroll = std::clamp(tabGestureScroll - delta, 0.0f, ImGui::GetScrollMaxX());
+                ImGui::SetScrollX(tabGestureScroll);
+            }
+            tabGestureLastX = mouse.x;
+        }
+        bool firstTab = true;
+        for (const auto& option : order) {
+            if (items.find(option.name) == items.end()) { continue; }
+            if (!firstTab) { ImGui::SameLine(0, 4.0f * style::uiScale); }
+            firstTab = false;
+            bool selected = option.name == selectedEntry;
+            ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(selected ? ImGuiCol_TabActive : ImGuiCol_Tab));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_TabHovered));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::GetStyleColorVec4(ImGuiCol_TabActive));
+            bool pressed = ImGui::Button(option.name.c_str(), ImVec2(0, height));
+            ImGui::PopStyleColor(3);
+            if (pressed && !(tabGestureActive && tabGestureDragged)) {
+                selectedEntry = option.name;
+            }
+            if (selected && tabScrollToSelection && !tabGestureActive) {
+                ImGui::SetScrollHereX(0.5f);
+                tabScrollToSelection = false;
+            }
+        }
+    }
+    ImGui::EndChild();
+    if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) { tabGestureActive = false; }
+    ImGui::SameLine(0, spacing);
+    if (ImGui::Button("...##MenuTabList", ImVec2(listWidth, height))) { ImGui::OpenPopup("##MenuTabPicker"); }
+    ImGui::PopStyleVar();
+    if (ImGui::BeginPopup("##MenuTabPicker")) {
+        for (const auto& option : order) {
+            if (items.find(option.name) == items.end()) { continue; }
+            if (ImGui::Selectable(option.name.c_str(), option.name == selectedEntry)) {
+                selectedEntry = option.name;
+                tabScrollToSelection = true;
+            }
+        }
+        ImGui::EndPopup();
+    }
+    ImGui::Separator();
+
+    bool changed = previousEntry != selectedEntry;
+    auto found = items.find(selectedEntry);
+    if (found == items.end()) { return changed; }
+    MenuItem_t item = found->second;
+    ImGui::PushID(selectedEntry.c_str());
+    if (ImGui::BeginChild("##MenuContent")) {
+        if (item.inst != nullptr) {
+            bool enabled = item.inst->isEnabled();
+            ImGui::BeginDisabled(core::isTuningLocked());
+            if (ImGui::Checkbox("Enabled##MenuModule", &enabled) && !core::isTuningLocked()) {
+                enabled ? item.inst->enable() : item.inst->disable();
+                changed = true;
+            }
+            ImGui::EndDisabled();
+            ImGui::Separator();
+        }
+        item.drawHandler(item.ctx);
+    }
+    ImGui::EndChild();
+    ImGui::PopID();
+    return changed;
+}
+
+bool Menu::drawSections(bool updateStates) {
     bool changed = false;
     float menuWidth = ImGui::GetContentRegionAvail().x;
     ImGuiWindow* window = ImGui::GetCurrentWindow();

@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 #include <mutex>
+#include <limits>
 #include <gui/widgets/bandplan.h>
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
@@ -15,6 +16,7 @@ namespace ImGui {
     public:
         void setOffset(double offset);
         void setCenterOffset(double offset);
+        double getMaxDragBandwidth() const;
         void setBandwidth(double bw);
         void setReference(int ref);
         void setSnapInterval(double interval);
@@ -35,6 +37,8 @@ namespace ImGui {
         double lowerOffset;
         double upperOffset;
         double bandwidth;
+        double minCenterOffset = -std::numeric_limits<double>::infinity();
+        double maxCenterOffset = std::numeric_limits<double>::infinity();
         double snapInterval = 5000;
         int reference = REF_CENTER;
 
@@ -215,6 +219,8 @@ namespace ImGui {
         ImVec2 fftAreaMax;
         ImVec2 freqAreaMin;
         ImVec2 freqAreaMax;
+        ImVec2 tuningAreaMin;
+        ImVec2 tuningAreaMax;
         ImVec2 wfMin;
         ImVec2 wfMax;
 
@@ -224,6 +230,8 @@ namespace ImGui {
         void drawVFOs();
         void drawBandPlan();
         void processInputs();
+        bool drawTuningControls();
+        bool drawTuningControl(const ImRect& bounds, int control, WaterfallVFO* vfo);
         void onPositionChange();
         void onResize();
         void updateWaterfallFb();
@@ -322,6 +330,9 @@ namespace ImGui {
         WaterfallVFO* relatedVfo = NULL;
         ImVec2 mouseDownPos;
 
-        ImVec2 lastMousePos;
+        std::string tuningDragChannel;
+        double tuningDragValue = 0;
+        float tuningDragDelta = 0;
+        int tuningDragControl = -1;
     };
 };

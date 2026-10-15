@@ -54,6 +54,7 @@ namespace dsp::multirate {
         void setInSamplerate(double inSamplerate) {
             assert(base_type::_block_init);
             std::lock_guard<std::recursive_mutex> lck(base_type::ctrlMtx);
+            if (_inSamplerate == inSamplerate) { return; }
             base_type::tempStop();
             _inSamplerate = inSamplerate;
             reconfigure();
@@ -63,6 +64,7 @@ namespace dsp::multirate {
         void setOutSamplerate(double outSamplerate) {
             assert(base_type::_block_init);
             std::lock_guard<std::recursive_mutex> lck(base_type::ctrlMtx);
+            if (_outSamplerate == outSamplerate) { return; }
             base_type::tempStop();
             _outSamplerate = outSamplerate;
             reconfigure();
@@ -72,6 +74,7 @@ namespace dsp::multirate {
         void setRates(double inSamplerate, double outSamplerate) {
             assert(base_type::_block_init);
             std::lock_guard<std::recursive_mutex> lck(base_type::ctrlMtx);
+            if (_inSamplerate == inSamplerate && _outSamplerate == outSamplerate) { return; }
             base_type::tempStop();
             _inSamplerate = inSamplerate;
             _outSamplerate = outSamplerate;
@@ -119,7 +122,7 @@ namespace dsp::multirate {
 
         void reconfigure() {
             // Calculate highest power-of-two decimation for the power decimator 
-            int predecPower = std::min<int>(floor(log2(_inSamplerate / _outSamplerate)), PowerDecimator<T>::getMaxRatio());
+            int predecPower = std::max(0, std::min<int>(floor(log2(_inSamplerate / _outSamplerate)), PowerDecimator<T>::getMaxRatio()));
             int predecRatio = std::min<int>(1 << predecPower, PowerDecimator<T>::getMaxRatio());
             double intSamplerate = _inSamplerate;
 

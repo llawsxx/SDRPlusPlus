@@ -128,6 +128,12 @@ namespace displaymenu {
 
     void draw(void* ctx) {
         float menuWidth = ImGui::GetContentRegionAvail().x;
+        if (ImGui::Checkbox("Tabbed menu", &gui::menu.tabbed)) {
+            gui::mainWindow.setFirstMenuRender();
+            core::configManager.acquire();
+            core::configManager.conf["tabbedMenu"] = gui::menu.tabbed;
+            core::configManager.release(true);
+        }
         if (ImGui::Checkbox("Show Waterfall##_sdrpp", &showWaterfall)) {
             setWaterfallShown(showWaterfall);
         }

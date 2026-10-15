@@ -11,6 +11,8 @@
             android:name="org.sdrpp.sdrpp.MainActivity"
             android:icon="@mipmap/ic_launcher"
             android:theme="@android:style/Theme.NoTitleBar"
+            android:exported="true"
+            android:launchMode="singleTask"
             android:configChanges="orientation|keyboardHidden|screenSize">
             <meta-data android:name="android.app.lib_name" android:value="sdrpp_core" />
 
@@ -18,10 +20,15 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" android:resource="@xml/usb_device_filter" />
         </activity>
     </application>
 
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 </manifest>

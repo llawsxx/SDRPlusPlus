@@ -9,6 +9,7 @@
 #include <utils/optionlist.h>
 #include <aaudio/AAudio.h>
 #include <core.h>
+#include <atomic>
 
 #define CONCAT(a, b) ((std::string(a) + b).c_str())
 
@@ -60,6 +61,7 @@ public:
 
 private:
     void doStart() {
+        stopping.store(false);
         // Create stream builder
         AAudioStreamBuilder *builder = nullptr;
         aaudio_result_t result = AAudio_createStreamBuilder(&builder);
@@ -108,6 +110,7 @@ private:
     }
 
     void doStop() {
+        stopping.store(true);
         packer.stop();
         packer.out.stopReader();
         if (stream) { AAudioStream_requestStop(stream); }
@@ -121,10 +124,17 @@ private:
             int count = packer.out.read();
             if (count < 0) { return; }
             if (stream) {
-                aaudio_result_t written = AAudioStream_write(stream, packer.out.readBuf, count, 100000000);
-                if (written != count && !outputErrorReported) {
-                    outputErrorReported = true;
-                    core::reportRecordingError(_streamName + ": audio output underrun or write failure; check output device");
+                int offset = 0;
+                while (offset < count && !stopping.load()) {
+                    aaudio_result_t written = AAudioStream_write(stream, packer.out.readBuf + offset, count - offset, 100000000);
+                    if (written <= 0) {
+                        if (!stopping.load() && !outputErrorReported) {
+                            outputErrorReported = true;
+                            core::reportRecordingError(_streamName + ": audio output underrun or write failure; check output device");
+                        }
+                        break;
+                    }
+                    offset += written;
                 }
             }
             packer.out.flush();
@@ -148,6 +158,7 @@ private:
 
     AAudioStream *stream = NULL;
     bool outputErrorReported = false;
+    std::atomic<bool> stopping{true};
     SinkManager::Stream* _stream;
     dsp::buffer::Packer<dsp::stereo_t> packer;
 

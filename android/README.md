@@ -87,10 +87,57 @@ selected with `-DSDRPP_ANDROID_DEPS_ROOT=/path/to/prefix`.
 The old Docker image's Gradle 7 toolchain cannot build the upgraded Android project;
 the Android CI job now uses the same Gradle Wrapper and source-build path as the IDE.
 
+## USB hotplug
+
+Connecting a supported USB SDR while the app is open requests Android USB access
+immediately, unless access has already been granted. Permission callbacks remain
+registered for the Activity lifetime, including after denial or a previous grant.
+Unplugging clears the old descriptor and allows a fresh request after replugging.
+The USB attachment intent also lets Android offer SDR++ when the app is closed;
+an existing Activity handles the intent without starting a second native instance.
+The device filter matches the core's Airspy, Airspy HF+, HackRF, HydraSDR and
+RTL-SDR VID/PID lists, avoiding permission prompts for unrelated peripherals.
+Authorizing another device does not replace a currently opened SDR connection.
+
 ## Multi-channel operation
+
+The menu defaults to horizontal tabs: only the selected category's controls are
+shown. Tap once to switch categories, or drag the tab strip horizontally to
+reveal overflow tabs without changing the selection. A tab-list picker also
+provides direct access to every category; the selected
+category is remembered. Its content scrolls independently of the tab strip.
+Landscape windows place the menu on the left; portrait windows place it below
+the spectrum/waterfall. The toolbar menu button hides either layout. To use the
+old collapsible sections instead, disable **Tabbed menu** in **Display**.
+
+On Android, the button below **Lock** switches between portrait and landscape:
+**Landscape** enters landscape from portrait, and **Portrait** switches back.
+The selected orientation is remembered across restarts. Until the first manual
+selection, the app follows the system orientation policy. The old independent
+orientation-lock setting is no longer used. The main **Lock** holds the current
+orientation and disables this button; unlocking restores the selected direction.
+Rotation keeps the existing activity/native receiver alive and does not
+intentionally stop the SDR or recordings. Portrait keeps the status bar visible;
+landscape hides it, and menu placement follows the existing responsive layout.
 
 The **Multi Receiver** menu adds independent demodulation and per-channel audio/IQ
 recording. Android recording directories are selected through the system folder
 picker, with persistent access grants. See
 [the multi-channel guide](../misc_modules/multi_receiver/README.md) for monitoring,
 locking, recording formats, error handling and Frequency Manager channel groups.
+
+## Constellation and IQ-only channels
+
+The **Constellation** menu has a **Show constellation** switch, scatter/density
+views and a larger window. It supports raw IQ plus manual/automatic PSK and square
+QAM inspection plus binary FSK detection/frequency-level display, with optional
+blind symbol-rate estimation and manual override. Editing the manual rate
+automatically turns off automatic estimation.
+Auto detection and explicit CDR/DAB detection modes also inspect compatible
+OFDM timing, including CDR digital sidebands around central analog FM and DAB
+periodic null symbols. These are candidates only: no broadcast audio/service
+decoding or recovered OFDM constellation, and DAB versus DAB+ is not distinguished.
+Use **Free (IQ only)** in Radio or Multi Receiver for arbitrary channel bandwidth
+without audio. Channel bandwidth is shared by reception, constellation input and
+per-channel IQ recording. See [the constellation guide](../misc_modules/constellation/README.md)
+for automatic-estimation assumptions and limitations.

@@ -178,6 +178,11 @@ public:
         // Configure the wav writer
         if (recMode == RECORDER_MODE_AUDIO) {
             if (selectedStreamName.empty()) { return; }
+            int mode = -1;
+            if (core::modComManager.interfaceExists(selectedStreamName) && core::modComManager.getModuleName(selectedStreamName) == "radio") {
+                core::modComManager.callInterface(selectedStreamName, RADIO_IFACE_CMD_GET_MODE, nullptr, &mode);
+            }
+            if (mode == RADIO_IFACE_MODE_FREE) { recordingError = "Free mode has no audio; choose IQ recording"; return; }
             samplerate = sigpath::sinkManager.getStreamSampleRate(selectedStreamName);
         }
         else {
@@ -217,6 +222,8 @@ public:
         else {
             // Create and bind IQ stream
             basebandStream = new dsp::stream<dsp::complex_t>();
+            core::retainTuningLock();
+            tuningHeld = true;
             basebandSink.setInput(basebandStream);
             basebandSink.start();
             sigpath::iqFrontEnd.bindIQStream(basebandStream);
@@ -253,6 +260,10 @@ public:
         }
         
         recording = false;
+        if (tuningHeld) {
+            core::releaseTuningLock();
+            tuningHeld = false;
+        }
     }
 
 private:
@@ -420,6 +431,9 @@ private:
             }
         }
         ImGui::EndDisabled();
+        if (_this->recording && _this->recMode == RECORDER_MODE_BASEBAND) {
+            ImGui::TextWrapped("Full-band IQ recording holds tuning and bandwidth settings until stopped.");
+        }
     }
 
     void selectStream(std::string name) {
@@ -518,7 +532,8 @@ private:
         { RADIO_IFACE_MODE_USB, "USB" },
         { RADIO_IFACE_MODE_CW,  "CW"  },
         { RADIO_IFACE_MODE_LSB, "LSB" },
-        { RADIO_IFACE_MODE_RAW, "RAW" }
+        { RADIO_IFACE_MODE_RAW, "RAW" },
+        { RADIO_IFACE_MODE_FREE, "Free" }
     };
 
     std::string genFileName(std::string templ, int mode, std::string name) {
@@ -654,6 +669,7 @@ private:
     dsp::stereo_t audioLvl = { -100.0f, -100.0f };
 
     bool recording = false;
+    bool tuningHeld = false;
     bool ignoringSilence = false;
     wav::Writer writer;
     std::string recordingError;

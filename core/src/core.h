@@ -11,6 +11,9 @@ namespace core {
     SDRPP_EXPORT CommandArgsParser args;
     SDRPP_EXPORT bool isSessionLocked();
     SDRPP_EXPORT void setSessionLocked(bool locked);
+    enum class ScreenOrientation { Automatic, Portrait, Landscape };
+    SDRPP_EXPORT ScreenOrientation getScreenOrientation();
+    SDRPP_EXPORT bool setScreenOrientation(ScreenOrientation orientation);
     SDRPP_EXPORT bool isTuningLocked();
     SDRPP_EXPORT void retainTuningLock();
     SDRPP_EXPORT void releaseTuningLock();

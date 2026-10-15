@@ -51,6 +51,13 @@ namespace backend {
         if (method) { call.env->CallVoidMethod(app->activity->clazz, method, static_cast<jboolean>(locked)); }
     }
 
+    void setScreenOrientation(int orientation) {
+        ActivityCall call;
+        if (!call.env || !call.activityClass) { return; }
+        auto method = call.env->GetMethodID(call.activityClass, "setScreenOrientation", "(I)V");
+        if (method) { call.env->CallVoidMethod(app->activity->clazz, method, static_cast<jint>(orientation)); }
+    }
+
     void chooseRecordingDirectory() {
         ActivityCall call;
         if (!call.env || !call.activityClass) { return; }
