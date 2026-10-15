@@ -1,6 +1,6 @@
 apply plugin: 'com.android.application'
 
-def androidAbis = providers.gradleProperty('sdrpp.abis').getOrElse('arm64-v8a').split(',').collect { it.trim() }
+def androidAbis = providers.gradleProperty('sdrpp.abis').getOrElse('arm64-v8a,armeabi-v7a,x86,x86_64').split(',').collect { it.trim() }
 def generatedAssets = layout.buildDirectory.dir('generated/sdrppAssets')
 
 android {

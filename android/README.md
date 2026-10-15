@@ -72,11 +72,21 @@ Changes to the dependency scripts, locked sources, NDK or ABI invalidate the
 relevant build stamps. Source preparation is locked to avoid concurrent ABI
 builds modifying the shared cache. Delete `android/deps` to rebuild everything.
 
-The default ABI is `arm64-v8a`. To build other ABIs, set this in your personal
-Gradle properties or pass it on the command line:
+By default, APKs include `arm64-v8a`, `armeabi-v7a`, `x86` and `x86_64`.
+To limit the build to one ABI, set this in your personal Gradle properties or
+pass it on the command line:
 
 ```powershell
-.\gradlew.bat :app:assembleDebug -Psdrpp.abis=arm64-v8a,armeabi-v7a,x86,x86_64
+.\gradlew.bat :app:assembleDebug -Psdrpp.abis=arm64-v8a
+```
+
+Both Debug and Release package native modules as `lib<module>.so` on Android.
+Non-debuggable Android installations only extract native libraries with the
+`lib` prefix; the runtime module list uses the same names. Desktop module names
+are unchanged. Verify a built APK from the repository root with:
+
+```powershell
+python core/tests/android_apk.py android/app/build/outputs/apk/release/app-release-unsigned.apk
 ```
 
 The first build needs internet access and takes substantially longer than
@@ -105,6 +115,11 @@ RTL-SDR VID/PID lists, avoiding permission prompts for unrelated peripherals.
 Authorizing another device does not replace a currently opened SDR connection.
 
 ## Multi-channel operation
+
+New Android configurations default to 200% UI scaling. Existing saved scaling
+preferences are preserved; change **Display > High-DPI Scaling** to use a different
+value. The loading logo, title and progress message are fitted and centered
+inside the current viewport in either orientation, independently of UI scaling.
 
 The menu defaults to horizontal tabs: only the selected category's controls are
 shown. Tap once to switch categories, or drag the tab strip horizontally to

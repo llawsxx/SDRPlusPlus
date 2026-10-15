@@ -37,6 +37,21 @@ class AndroidConfigurationChecks(unittest.TestCase):
         )
         self.assertIn("android.permission.INTERNET", permissions)
 
+    def test_android_modules_use_extractable_library_names(self):
+        source = (ROOT / "core/src/core.cpp").read_text(encoding="utf-8")
+        modules = re.findall(r'conf\["modules"\]\[modCount\+\+\]\s*=\s*"([^"]+)"', source)
+        self.assertTrue(modules)
+        self.assertEqual(len(modules), len(set(modules)))
+        self.assertTrue(all(name.startswith("lib") and name.endswith(".so") for name in modules))
+        cmake = (ROOT / "sdrpp_module.cmake").read_text(encoding="utf-8")
+        self.assertRegex(cmake, r'(?s)if\s*\(ANDROID\).*?PROPERTIES PREFIX "lib".*?else\s*\(\).*?PROPERTIES PREFIX ""')
+
+    def test_android_default_scale_is_two(self):
+        source = (ROOT / "core/src/core.cpp").read_text(encoding="utf-8")
+        style = (ROOT / "core/src/gui/style.cpp").read_text(encoding="utf-8")
+        self.assertRegex(source, r'#ifdef __ANDROID__\s+defConfig\["uiScale"\] = 2\.0f;')
+        self.assertRegex(style, r'(?s)#ifndef __ANDROID__\s+float uiScale = 1\.0f;\s+#else\s+float uiScale = 2\.0f;')
+
     def test_lock_back_handler_and_orientation_are_preserved(self):
         activity = self.manifest.find("application/activity")
         self.assertEqual(activity.get(ANDROID + "enableOnBackInvokedCallback"), "false")

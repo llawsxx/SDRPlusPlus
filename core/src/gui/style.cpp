@@ -16,7 +16,7 @@ namespace style {
 #ifndef __ANDROID__
     float uiScale = 1.0f;
 #else
-    float uiScale = 3.0f;
+    float uiScale = 2.0f;
 #endif
 
     bool loadFonts(std::string resDir) {

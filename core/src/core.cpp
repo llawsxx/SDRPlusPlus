@@ -289,7 +289,7 @@ int sdrpp_main(int argc, char* argv[]) {
     // Themes
     defConfig["theme"] = "Dark";
 #ifdef __ANDROID__
-    defConfig["uiScale"] = 3.0f;
+    defConfig["uiScale"] = 2.0f;
 #else
     defConfig["uiScale"] = 1.0f;
 #endif
@@ -355,35 +355,35 @@ int sdrpp_main(int argc, char* argv[]) {
     int modCount = 0;
     core::configManager.conf["modules"] = json::array();
 
-    core::configManager.conf["modules"][modCount++] = "airspy_source.so";
-    core::configManager.conf["modules"][modCount++] = "airspyhf_source.so";
-    core::configManager.conf["modules"][modCount++] = "hackrf_source.so";
-    core::configManager.conf["modules"][modCount++] = "hermes_source.so";
-    core::configManager.conf["modules"][modCount++] = "hydrasdr_source.so";
-    core::configManager.conf["modules"][modCount++] = "plutosdr_source.so";
-    core::configManager.conf["modules"][modCount++] = "rfspace_source.so";
-    core::configManager.conf["modules"][modCount++] = "rtl_sdr_source.so";
-    core::configManager.conf["modules"][modCount++] = "rtl_tcp_source.so";
-    core::configManager.conf["modules"][modCount++] = "sdrpp_server_source.so";
-    core::configManager.conf["modules"][modCount++] = "spyserver_source.so";
+    core::configManager.conf["modules"][modCount++] = "libairspy_source.so";
+    core::configManager.conf["modules"][modCount++] = "libairspyhf_source.so";
+    core::configManager.conf["modules"][modCount++] = "libhackrf_source.so";
+    core::configManager.conf["modules"][modCount++] = "libhermes_source.so";
+    core::configManager.conf["modules"][modCount++] = "libhydrasdr_source.so";
+    core::configManager.conf["modules"][modCount++] = "libplutosdr_source.so";
+    core::configManager.conf["modules"][modCount++] = "librfspace_source.so";
+    core::configManager.conf["modules"][modCount++] = "librtl_sdr_source.so";
+    core::configManager.conf["modules"][modCount++] = "librtl_tcp_source.so";
+    core::configManager.conf["modules"][modCount++] = "libsdrpp_server_source.so";
+    core::configManager.conf["modules"][modCount++] = "libspyserver_source.so";
 
-    core::configManager.conf["modules"][modCount++] = "network_sink.so";
-    core::configManager.conf["modules"][modCount++] = "audio_sink.so";
+    core::configManager.conf["modules"][modCount++] = "libnetwork_sink.so";
+    core::configManager.conf["modules"][modCount++] = "libaudio_sink.so";
 
-    core::configManager.conf["modules"][modCount++] = "m17_decoder.so";
-    core::configManager.conf["modules"][modCount++] = "meteor_demodulator.so";
-    core::configManager.conf["modules"][modCount++] = "radio.so";
+    core::configManager.conf["modules"][modCount++] = "libm17_decoder.so";
+    core::configManager.conf["modules"][modCount++] = "libmeteor_demodulator.so";
+    core::configManager.conf["modules"][modCount++] = "libradio.so";
 
-    core::configManager.conf["modules"][modCount++] = "frequency_manager.so";
-    core::configManager.conf["modules"][modCount++] = "recorder.so";
+    core::configManager.conf["modules"][modCount++] = "libfrequency_manager.so";
+    core::configManager.conf["modules"][modCount++] = "librecorder.so";
 #ifdef SDRPP_HAS_CONSTELLATION
-    core::configManager.conf["modules"][modCount++] = "constellation.so";
+    core::configManager.conf["modules"][modCount++] = "libconstellation.so";
 #endif
 #ifdef SDRPP_HAS_MULTI_RECEIVER
-    core::configManager.conf["modules"][modCount++] = "multi_receiver.so";
+    core::configManager.conf["modules"][modCount++] = "libmulti_receiver.so";
 #endif
-    core::configManager.conf["modules"][modCount++] = "rigctl_server.so";
-    core::configManager.conf["modules"][modCount++] = "scanner.so";
+    core::configManager.conf["modules"][modCount++] = "librigctl_server.so";
+    core::configManager.conf["modules"][modCount++] = "libscanner.so";
 #endif
 
     // Fix missing elements in config
