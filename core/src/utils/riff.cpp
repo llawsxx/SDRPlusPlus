@@ -19,8 +19,7 @@ namespace riff {
         std::lock_guard<std::recursive_mutex> lck(mtx);
 
         // Open file
-        file = std::ofstream(path, std::ios::out | std::ios::binary);
-        if (!file.is_open()) { return false; }
+        if (!file.open(path)) { return false; }
 
         // Begin RIFF chunk
         beginRIFF(form);
@@ -113,6 +112,34 @@ namespace riff {
         }
         file.write((char*)data, len);
         chunks.top().hdr.size += len;
+    }
+
+    bool Writer::flush() {
+        std::lock_guard<std::recursive_mutex> lck(mtx);
+        if (!file.is_open()) { return false; }
+        auto position = file.tellp();
+        auto pending = chunks;
+        uint32_t childSize = 0;
+        while (!pending.empty()) {
+            auto chunk = pending.top();
+            pending.pop();
+            chunk.hdr.size += childSize;
+            file.seekp(chunk.pos + std::streamoff(4));
+            file.write(reinterpret_cast<const char*>(&chunk.hdr.size), sizeof(chunk.hdr.size));
+            childSize = chunk.hdr.size + sizeof(ChunkHeader);
+        }
+        file.seekp(position);
+        return file.flush();
+    }
+
+    std::string Writer::error() {
+        std::lock_guard<std::recursive_mutex> lck(mtx);
+        return file.error();
+    }
+
+    void Writer::fail(const std::string& message) {
+        std::lock_guard<std::recursive_mutex> lck(mtx);
+        file.fail(message);
     }
 
     void Writer::beginRIFF(const char form[4]) {

@@ -40,6 +40,8 @@ namespace wav {
 
         // Reset work values
         samplesWritten = 0;
+        lastFlushSamples = 0;
+        lastWrite = std::chrono::steady_clock::now();
 
         // Fill header
         bytesPerSamp = (SAMP_BITS[_type] / 8) * _channels;
@@ -69,7 +71,7 @@ namespace wav {
         }
 
         // Open file
-        if (!rw.open(path, WAVE_FILE_TYPE)) { return false; }
+        if (!rw.open(path, WAVE_FILE_TYPE)) { close(); return false; }
 
         // Write format chunk
         rw.beginChunk(FORMAT_MARKER);
@@ -79,7 +81,7 @@ namespace wav {
         // Begin data chunk
         rw.beginChunk(DATA_MARKER);
         
-        return true;
+        return rw.flush();
     }
 
     bool Writer::isOpen() {
@@ -90,13 +92,10 @@ namespace wav {
     void Writer::close() {
         std::lock_guard<std::recursive_mutex> lck(mtx);
         // Do nothing if the file is not open
-        if (!rw.isOpen()) { return; }
-
-        // Finish data chunk
-        rw.endChunk();
-
-        // Close the file
-        rw.close();
+        if (rw.isOpen()) {
+            rw.endChunk();
+            rw.close();
+        }
 
         // Free buffers
         if (bufU8) {
@@ -149,7 +148,12 @@ namespace wav {
 
     void Writer::write(float* samples, int count) {
         std::lock_guard<std::recursive_mutex> lck(mtx);
-        if (!rw.isOpen()) { return; }
+        if (!rw.isOpen() || !rw.error().empty()) { return; }
+        if (count <= 0 || count > STREAM_BUFFER_SIZE) { rw.fail("Invalid recording block size"); return; }
+        if ((static_cast<uint64_t>(samplesWritten) + count) * bytesPerSamp > 0xFFFFFFFFULL - 64) {
+            rw.fail("WAV size limit reached; start a new recording or use segmented channel recording");
+            return;
+        }
         
         // Select different writer function depending on the chose depth
         int tcount = count * _channels;
@@ -178,6 +182,33 @@ namespace wav {
         }
 
         // Increment sample counter
-        samplesWritten += count;
+        if (rw.error().empty()) {
+            samplesWritten += count;
+            if (samplesWritten - lastFlushSamples >= _samplerate) {
+                rw.flush();
+                lastFlushSamples = samplesWritten;
+            }
+            lastWrite = std::chrono::steady_clock::now();
+        }
+    }
+
+    size_t Writer::getSamplesWritten() {
+        std::lock_guard<std::recursive_mutex> lck(mtx);
+        return samplesWritten;
+    }
+
+    uint64_t Writer::getBytesWritten() {
+        std::lock_guard<std::recursive_mutex> lck(mtx);
+        return static_cast<uint64_t>(samplesWritten) * bytesPerSamp;
+    }
+
+    std::string Writer::getError() {
+        std::lock_guard<std::recursive_mutex> lck(mtx);
+        return rw.error();
+    }
+
+    double Writer::secondsSinceWrite() {
+        std::lock_guard<std::recursive_mutex> lck(mtx);
+        return std::chrono::duration<double>(std::chrono::steady_clock::now() - lastWrite).count();
     }
 }

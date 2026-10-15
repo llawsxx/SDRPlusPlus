@@ -281,6 +281,7 @@ namespace sourcemenu {
     }
 
     void draw(void* ctx) {
+        ImGui::BeginDisabled(core::isTuningLocked());
         float itemWidth = ImGui::GetContentRegionAvail().x;
         float lineHeight = ImGui::GetTextLineHeightWithSpacing();
         float spacing = lineHeight - ImGui::GetTextLineHeight();
@@ -374,5 +375,6 @@ namespace sourcemenu {
             core::configManager.release(true);
         }
         if (running) { style::endDisabled(); }
+        ImGui::EndDisabled();
     }
 }

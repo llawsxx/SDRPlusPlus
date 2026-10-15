@@ -26,4 +26,5 @@ private:
     bool dialogOpen = false;
     char strPath[2048];
     bool pathChanged = false;
+    std::string selectionError;
 };

@@ -74,6 +74,7 @@ void IQFrontEnd::setInput(dsp::stream<dsp::complex_t>* in) {
 }
 
 void IQFrontEnd::setSampleRate(double sampleRate) {
+    if (core::isTuningLocked()) { return; }
     // Temp stop the necessary blocks
     dcBlock.tempStop();
     for (auto& [name, vfo] : vfos) {
@@ -103,6 +104,7 @@ void IQFrontEnd::setBuffering(bool enabled) {
 }
 
 void IQFrontEnd::setDecimation(int ratio) {
+    if (core::isTuningLocked()) { return; }
     // Temp stop the decimator
     decim.tempStop();
 

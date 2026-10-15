@@ -22,6 +22,8 @@
 #include <utils/optionlist.h>
 #include <utils/wav.h>
 #include <radio_interface.h>
+#include <atomic>
+#include <chrono>
 
 #define CONCAT(a, b) ((std::string(a) + b).c_str())
 
@@ -118,13 +120,16 @@ public:
 
         gui::menu.registerEntry(name, menuHandler, this);
         core::modComManager.registerInterface("recorder", name, moduleInterfaceHandler, this);
+        recordingMonitor = EventHandler<int>(monitorRecording, this);
+        core::onFrame.bindHandler(&recordingMonitor);
     }
 
     ~RecorderModule() {
+        core::onFrame.unbindHandler(&recordingMonitor);
         std::lock_guard<std::recursive_mutex> lck(recMtx);
         core::modComManager.unregisterInterface(name);
         gui::menu.removeEntry(name);
-        stop();
+        stop(true);
         deselectStream();
         sigpath::sinkManager.onStreamRegistered.unbindHandler(&onStreamRegisteredHandler);
         sigpath::sinkManager.onStreamUnregister.unbindHandler(&onStreamUnregisterHandler);
@@ -166,6 +171,9 @@ public:
     void start() {
         std::lock_guard<std::recursive_mutex> lck(recMtx);
         if (recording) { return; }
+        recordingError.clear();
+        if (core::isSessionLocked()) { recordingError = "Unlock before starting a recording"; return; }
+        if (!gui::mainWindow.isPlaying()) { recordingError = "Start the SDR before recording"; return; }
 
         // Configure the wav writer
         if (recMode == RECORDER_MODE_AUDIO) {
@@ -185,11 +193,16 @@ public:
         std::string extension = ".wav";
         std::string expandedPath = expandString(folderSelect.path + "/" + genFileName(nameTemplate, recMode, vfoName) + extension);
         if (!writer.open(expandedPath)) {
+            recordingError = writer.getError();
+            if (recordingError.empty()) { recordingError = "Cannot create recording file"; }
+            core::reportRecordingError(name + ": " + recordingError);
+            writer.close();
             flog::error("Failed to open file for recording: {0}", expandedPath);
             return;
         }
 
         // Open audio stream or baseband
+        lastSampleTime.store(sampleTime());
         if (recMode == RECORDER_MODE_AUDIO) {
             // Start correct path depending on 
             if (stereo) {
@@ -212,8 +225,9 @@ public:
         recording = true;
     }
 
-    void stop() {
+    void stop(bool force = false) {
         std::lock_guard<std::recursive_mutex> lck(recMtx);
+        if (core::isSessionLocked() && !force) { return; }
         if (!recording) { return; }
 
         // Close audio stream or baseband
@@ -233,14 +247,47 @@ public:
 
         // Close file
         writer.close();
+        if (!writer.getError().empty()) {
+            recordingError = writer.getError();
+            core::reportRecordingError(name + ": " + recordingError);
+        }
         
         recording = false;
     }
 
 private:
+    static int64_t sampleTime() {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    }
+
+    static void monitorRecording(int, void* context) {
+        auto* recorder = static_cast<RecorderModule*>(context);
+        if (!recorder->recording) { return; }
+        std::string message = recorder->writer.getError();
+        if (message.empty() && sampleTime() - recorder->lastSampleTime.load() > 5000) {
+            message = "No samples received for 5 seconds; recording stopped";
+        }
+        if (!message.empty()) {
+            recorder->stop(true);
+            recorder->recordingError = message;
+            core::reportRecordingError(recorder->name + ": " + message);
+        }
+    }
+
     static void menuHandler(void* ctx) {
         RecorderModule* _this = (RecorderModule*)ctx;
         float menuWidth = ImGui::GetContentRegionAvail().x;
+        if (_this->recording && !_this->writer.getError().empty()) {
+            _this->recordingError = _this->writer.getError();
+            _this->stop(true);
+        }
+        if (!_this->recordingError.empty()) {
+            ImGui::TextColored(ImVec4(1, 0.2f, 0.2f, 1), "%s", _this->recordingError.c_str());
+        }
+        ImGui::Text("Written: %.2f MiB", _this->writer.getBytesWritten() / 1048576.0);
+        if (_this->recording && !(_this->ignoreSilence && _this->ignoringSilence) && _this->writer.secondsSinceWrite() > 3.0) {
+            ImGui::TextColored(ImVec4(1, 0.2f, 0.2f, 1), "WARNING: recording has not received samples for 3 seconds");
+        }
 
         // Recording mode
         if (_this->recording) { style::beginDisabled(); }
@@ -350,6 +397,7 @@ private:
         // Record button
         bool canRecord = _this->folderSelect.pathIsValid();
         if (_this->recMode == RECORDER_MODE_AUDIO) { canRecord &= !_this->selectedStreamName.empty(); }
+        ImGui::BeginDisabled(core::isSessionLocked() || (!_this->recording && (!canRecord || !gui::mainWindow.isPlaying())));
         if (!_this->recording) {
             if (ImGui::Button(CONCAT("Record##_recorder_rec_", _this->name), ImVec2(menuWidth, 0))) {
                 _this->start();
@@ -371,6 +419,7 @@ private:
                 ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Recording %02d:%02d:%02d", dtm->tm_hour, dtm->tm_min, dtm->tm_sec);
             }
         }
+        ImGui::EndDisabled();
     }
 
     void selectStream(std::string name) {
@@ -400,7 +449,7 @@ private:
             selectedStreamName.clear();
             return;
         }
-        if (recording && recMode == RECORDER_MODE_AUDIO) { stop(); }
+        if (recording && recMode == RECORDER_MODE_AUDIO) { stop(true); }
         stopAudioPath();
         sigpath::sinkManager.unbindStream(selectedStreamName, audioStream);
         selectedStreamName.clear();
@@ -521,17 +570,20 @@ private:
     }
 
     std::string expandString(std::string input) {
+        if (input.rfind("content://", 0) == 0) { return input; }
         input = std::regex_replace(input, std::regex("%ROOT%"), root);
         return std::regex_replace(input, std::regex("//"), "/");
     }
 
     static void complexHandler(dsp::complex_t* data, int count, void* ctx) {
         RecorderModule* _this = (RecorderModule*)ctx;
+        _this->lastSampleTime.store(sampleTime());
         _this->writer.write((float*)data, count);
     }
 
     static void stereoHandler(dsp::stereo_t* data, int count, void* ctx) {
         RecorderModule* _this = (RecorderModule*)ctx;
+        _this->lastSampleTime.store(sampleTime());
         if (_this->ignoreSilence) {
             float absMax = 0.0f;
             float* _data = (float*)data;
@@ -548,6 +600,7 @@ private:
 
     static void monoHandler(float* data, int count, void* ctx) {
         RecorderModule* _this = (RecorderModule*)ctx;
+        _this->lastSampleTime.store(sampleTime());
         if (_this->ignoreSilence) {
             float absMax = 0.0f;
             for (int i = 0; i < count; i++) {
@@ -603,6 +656,9 @@ private:
     bool recording = false;
     bool ignoringSilence = false;
     wav::Writer writer;
+    std::string recordingError;
+    EventHandler<int> recordingMonitor;
+    std::atomic<int64_t> lastSampleTime{0};
     std::recursive_mutex recMtx;
     dsp::stream<dsp::complex_t>* basebandStream;
     dsp::stream<dsp::stereo_t> stereoStream;

@@ -1,4 +1,5 @@
 #include <signal_path/vfo_manager.h>
+#include <core.h>
 #include <signal_path/signal_path.h>
 #include <gui/gui.h>
 
@@ -28,6 +29,7 @@ VFOManager::VFO::~VFO() {
 }
 
 void VFOManager::VFO::setOffset(double offset) {
+    if (core::isTuningLocked()) { return; }
     wtfVFO->setOffset(offset);
     dspVFO->setOffset(wtfVFO->centerOffset);
 }
@@ -37,11 +39,13 @@ double VFOManager::VFO::getOffset() {
 }
 
 void VFOManager::VFO::setCenterOffset(double offset) {
+    if (core::isTuningLocked()) { return; }
     wtfVFO->setCenterOffset(offset);
     dspVFO->setOffset(offset);
 }
 
 void VFOManager::VFO::setBandwidth(double bandwidth, bool updateWaterfall) {
+    if (core::isTuningLocked()) { return; }
     if (_bandwidth == bandwidth) { return; }
     _bandwidth = bandwidth;
     if (updateWaterfall) { wtfVFO->setBandwidth(bandwidth); }
@@ -49,11 +53,13 @@ void VFOManager::VFO::setBandwidth(double bandwidth, bool updateWaterfall) {
 }
 
 void VFOManager::VFO::setSampleRate(double sampleRate, double bandwidth) {
+    if (core::isTuningLocked()) { return; }
     dspVFO->setOutSamplerate(sampleRate, bandwidth);
     wtfVFO->setBandwidth(bandwidth);
 }
 
 void VFOManager::VFO::setReference(int ref) {
+    if (core::isTuningLocked()) { return; }
     wtfVFO->setReference(ref);
 }
 

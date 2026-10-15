@@ -73,6 +73,7 @@ public:
     };
 
     struct Instance_t {
+        bool transient = false;
         ModuleManager::Module_t module;
         ModuleManager::Instance* instance;
     };

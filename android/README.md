@@ -86,3 +86,11 @@ opt-in with `-DSDRPP_ANDROID_BUILD_DEPS=ON`. Without it the existing
 selected with `-DSDRPP_ANDROID_DEPS_ROOT=/path/to/prefix`.
 The old Docker image's Gradle 7 toolchain cannot build the upgraded Android project;
 the Android CI job now uses the same Gradle Wrapper and source-build path as the IDE.
+
+## Multi-channel operation
+
+The **Multi Receiver** menu adds independent demodulation and per-channel audio/IQ
+recording. Android recording directories are selected through the system folder
+picker, with persistent access grants. See
+[the multi-channel guide](../misc_modules/multi_receiver/README.md) for monitoring,
+locking, recording formats, error handling and Frequency Manager channel groups.

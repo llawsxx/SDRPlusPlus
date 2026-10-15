@@ -49,7 +49,7 @@ private:
     std::string selectedName;
     SourceHandler* selectedHandler = NULL;
     double tuneOffset;
-    double currentFreq;
+    double currentFreq = 0;
     double ifFreq = 0.0;
     TuningMode tuneMode = TuningMode::NORMAL;
     dsp::stream<dsp::complex_t> nullSource;

@@ -2,10 +2,12 @@
 #include <gui/gui.h>
 #include <gui/tuner.h>
 #include <string>
+#include <core.h>
 
 namespace tuner {
 
     void centerTuning(std::string vfoName, double freq) {
+        if (core::isTuningLocked()) { return; }
         if (vfoName != "") {
             if (gui::waterfall.vfos.find(vfoName) == gui::waterfall.vfos.end()) { return; }
             sigpath::vfoManager.setOffset(vfoName, 0);
@@ -20,6 +22,7 @@ namespace tuner {
     }
 
     void normalTuning(std::string vfoName, double freq) {
+        if (core::isTuningLocked()) { return; }
         if (vfoName == "") {
             centerTuning(vfoName, freq);
             return;
@@ -109,6 +112,7 @@ namespace tuner {
     }
 
     void iqTuning(double freq) {
+        if (core::isTuningLocked()) { return; }
         gui::waterfall.setCenterFrequency(freq);
         gui::waterfall.centerFreqMoved = true;
         sigpath::sourceManager.tune(freq);

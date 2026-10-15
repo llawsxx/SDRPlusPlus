@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.13)
+project(multi_receiver)
+file(GLOB SRC "src/*.cpp")
+include(${SDRPP_MODULE_CMAKE})
+target_include_directories(multi_receiver PRIVATE "src/" "../../decoder_modules/radio/src")

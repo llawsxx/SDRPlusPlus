@@ -147,6 +147,7 @@ public:
     void postInit() {}
 
     void enable() {
+        if (core::isTuningLocked() || (enabled && vfo)) { return; }
         enabled = true;
         if (!vfo) {
             vfo = sigpath::vfoManager.createVFO(name, ImGui::WaterfallVFO::REF_CENTER, 0, 200000, 200000, 50000, 200000, false);
@@ -159,6 +160,7 @@ public:
     }
 
     void disable() {
+        if (core::isTuningLocked()) { return; }
         enabled = false;
         ifChain.stop();
         if (selectedDemod) { selectedDemod->stop(); }
@@ -189,7 +191,7 @@ private:
     static void menuHandler(void* ctx) {
         RadioModule* _this = (RadioModule*)ctx;
 
-        if (!_this->enabled) { style::beginDisabled(); }
+        if (!_this->enabled || core::isTuningLocked()) { style::beginDisabled(); }
 
         float menuWidth = ImGui::GetContentRegionAvail().x;
         ImGui::BeginGroup();
@@ -359,7 +361,7 @@ private:
             break;
         }
 
-        if (!_this->enabled) { style::endDisabled(); }
+        if (!_this->enabled || core::isTuningLocked()) { style::endDisabled(); }
     }
 
     demod::Demodulator* instantiateDemod(DemodID id) {
@@ -399,6 +401,7 @@ private:
     }
 
     void selectDemodByID(DemodID id) {
+        if (core::isTuningLocked()) { return; }
         auto startTime = std::chrono::high_resolution_clock::now();
         demod::Demodulator* demod = instantiateDemod(id);
         if (!demod) {
@@ -563,6 +566,7 @@ private:
 
 
     void setBandwidth(double bw) {
+        if (core::isTuningLocked()) { return; }
         bw = std::clamp<double>(bw, minBandwidth, maxBandwidth);
         bandwidth = bw;
         if (!selectedDemod) { return; }

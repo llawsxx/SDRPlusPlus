@@ -51,7 +51,7 @@ void SinkManager::Stream::stop() {
 
 void SinkManager::Stream::setVolume(float volume) {
     guiVolume = volume;
-    volumeAjust.setVolume(volume);
+    volumeAjust.setVolume(volume * sqrtf(monitorGain));
 }
 
 float SinkManager::Stream::getVolume() {
@@ -159,6 +159,28 @@ void SinkManager::registerStream(std::string name, SinkManager::Stream* stream) 
     if (available) { loadStreamConfig(name); }
 
     onStreamRegistered.emit(name);
+    applyMonitorSelection();
+}
+
+void SinkManager::setMonitorSelection(const std::vector<std::string>& names) {
+    monitorSelection = names;
+    monitorSelectionActive = true;
+    applyMonitorSelection();
+}
+
+void SinkManager::clearMonitorSelection() {
+    monitorSelectionActive = false;
+    applyMonitorSelection();
+}
+
+void SinkManager::applyMonitorSelection() {
+    float gain = 1.0f / std::max<size_t>(1, monitorSelection.size());
+    for (auto& entry : streams) {
+        auto* stream = entry.second;
+        stream->monitorGain = !monitorSelectionActive ? 1.0f :
+            (std::find(monitorSelection.begin(), monitorSelection.end(), entry.first) != monitorSelection.end() ? gain : 0.0f);
+        stream->setVolume(stream->getVolume());
+    }
 }
 
 void SinkManager::unregisterStream(std::string name) {
@@ -216,6 +238,7 @@ void SinkManager::unbindStream(std::string name, dsp::stream<dsp::stereo_t>* str
 }
 
 void SinkManager::setStreamSink(std::string name, std::string providerName) {
+    if (core::isTuningLocked()) { return; }
     if (streams.find(name) == streams.end()) {
         flog::error("Cannot set sink for stream '{0}'. Stream doesn't exist", name);
         return;

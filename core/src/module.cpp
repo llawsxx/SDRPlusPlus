@@ -1,6 +1,7 @@
 #include <module.h>
 #include <filesystem>
 #include <utils/flog.h>
+#include <core.h>
 
 ModuleManager::Module_t ModuleManager::loadModule(std::string path) {
     Module_t mod;
@@ -84,6 +85,7 @@ ModuleManager::Module_t ModuleManager::loadModule(std::string path) {
 }
 
 int ModuleManager::createInstance(std::string name, std::string module) {
+    if (core::isTuningLocked()) { return -1; }
     if (modules.find(module) == modules.end()) {
         flog::error("Module '{0}' doesn't exist", module);
         return -1;
@@ -106,6 +108,7 @@ int ModuleManager::createInstance(std::string name, std::string module) {
 }
 
 int ModuleManager::deleteInstance(std::string name) {
+    if (core::isTuningLocked()) { return -1; }
     if (instances.find(name) == instances.end()) {
         flog::error("Tried to remove non-existent instance '{0}'", name);
         return -1;
@@ -124,6 +127,7 @@ int ModuleManager::deleteInstance(ModuleManager::Instance* instance) {
 }
 
 int ModuleManager::enableInstance(std::string name) {
+    if (core::isTuningLocked()) { return -1; }
     if (instances.find(name) == instances.end()) {
         flog::error("Cannot enable '{0}', instance doesn't exist", name);
         return -1;
@@ -133,6 +137,7 @@ int ModuleManager::enableInstance(std::string name) {
 }
 
 int ModuleManager::disableInstance(std::string name) {
+    if (core::isTuningLocked()) { return -1; }
     if (instances.find(name) == instances.end()) {
         flog::error("Cannot disable '{0}', instance doesn't exist", name);
         return -1;

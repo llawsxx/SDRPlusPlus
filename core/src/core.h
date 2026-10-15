@@ -9,6 +9,14 @@ namespace core {
     SDRPP_EXPORT ModuleManager moduleManager;
     SDRPP_EXPORT ModuleComManager modComManager;
     SDRPP_EXPORT CommandArgsParser args;
+    SDRPP_EXPORT bool isSessionLocked();
+    SDRPP_EXPORT void setSessionLocked(bool locked);
+    SDRPP_EXPORT bool isTuningLocked();
+    SDRPP_EXPORT void retainTuningLock();
+    SDRPP_EXPORT void releaseTuningLock();
+    SDRPP_EXPORT Event<int> onFrame;
+    SDRPP_EXPORT void reportRecordingError(const std::string& message);
+    SDRPP_EXPORT std::string recordingError();
 
     void setInputSampleRate(double samplerate);
 };

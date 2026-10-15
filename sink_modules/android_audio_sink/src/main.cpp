@@ -61,8 +61,15 @@ public:
 private:
     void doStart() {
         // Create stream builder
-        AAudioStreamBuilder *builder;
+        AAudioStreamBuilder *builder = nullptr;
         aaudio_result_t result = AAudio_createStreamBuilder(&builder);
+        outputErrorReported = false;
+        if (result != AAUDIO_OK || !builder) {
+            core::reportRecordingError(_streamName + ": cannot create audio output; recording streams remain active");
+            packer.start();
+            workerThread = std::thread(&AudioSink::worker, this);
+            return;
+        }
 
         // Set stream options
         bufferSize = round(sampleRate / 60.0);
@@ -76,11 +83,22 @@ private:
         packer.setSampleCount(bufferSize);
         
         // Open the stream
-        AAudioStreamBuilder_openStream(builder, &stream);
+        result = AAudioStreamBuilder_openStream(builder, &stream);
+        if (result != AAUDIO_OK || !stream) {
+            stream = nullptr;
+            core::reportRecordingError(_streamName + ": audio output unavailable: " + AAudio_convertResultToText(result));
+        }
 
         // Stream stream and packer
         packer.start();
-        AAudioStream_requestStart(stream);
+        if (stream) {
+            result = AAudioStream_requestStart(stream);
+            if (result != AAUDIO_OK) {
+                core::reportRecordingError(_streamName + ": cannot start audio output: " + AAudio_convertResultToText(result));
+                AAudioStream_close(stream);
+                stream = nullptr;
+            }
+        }
 
         // We no longer need the builder
         AAudioStreamBuilder_delete(builder);
@@ -92,9 +110,9 @@ private:
     void doStop() {
         packer.stop();
         packer.out.stopReader();
-        AAudioStream_requestStop(stream);
-        AAudioStream_close(stream);
+        if (stream) { AAudioStream_requestStop(stream); }
         if (workerThread.joinable()) { workerThread.join(); }
+        if (stream) { AAudioStream_close(stream); stream = nullptr; }
         packer.out.clearReadStop();
     }
 
@@ -102,7 +120,13 @@ private:
         while (true) {
             int count = packer.out.read();
             if (count < 0) { return; }
-            AAudioStream_write(stream, packer.out.readBuf, count, 100000000);
+            if (stream) {
+                aaudio_result_t written = AAudioStream_write(stream, packer.out.readBuf, count, 100000000);
+                if (written != count && !outputErrorReported) {
+                    outputErrorReported = true;
+                    core::reportRecordingError(_streamName + ": audio output underrun or write failure; check output device");
+                }
+            }
             packer.out.flush();
         }
     }
@@ -123,6 +147,7 @@ private:
     std::thread workerThread;
 
     AAudioStream *stream = NULL;
+    bool outputErrorReported = false;
     SinkManager::Stream* _stream;
     dsp::buffer::Packer<dsp::stereo_t> packer;
 

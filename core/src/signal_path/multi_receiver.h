@@ -1,0 +1,7 @@
+#pragma once
+
+enum {
+    MULTI_RECEIVER_GET_SETUP,
+    MULTI_RECEIVER_LOAD_SETUP,
+    MULTI_RECEIVER_GET_ERROR
+};

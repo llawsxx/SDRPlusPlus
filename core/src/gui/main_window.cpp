@@ -258,7 +258,13 @@ void MainWindow::vfoAddedHandler(VFOManager::VFO* vfo, void* ctx) {
 }
 
 void MainWindow::draw() {
+    core::onFrame.emit(0);
     ImGui::Begin("Main", NULL, WINDOW_FLAGS);
+    std::string recordingFailure = core::recordingError();
+    if (!recordingFailure.empty()) {
+        ImGui::TextColored(ImVec4(1, 0.2f, 0.2f, 1), "Capture / output error: %s", recordingFailure.c_str());
+        if (ImGui::Button("Dismiss recording error")) { core::reportRecordingError(""); }
+    }
     ImVec4 textCol = ImGui::GetStyleColorVec4(ImGuiCol_Text);
 
     ImGui::WaterfallVFO* vfo = NULL;
@@ -330,6 +336,11 @@ void MainWindow::draw() {
     }
 
     // To Bar
+    bool sessionLocked = core::isSessionLocked();
+    if (ImGui::Checkbox("Lock##session", &sessionLocked)) {
+        core::setSessionLocked(sessionLocked);
+    }
+    ImGui::SameLine();
     // ImGui::BeginChild("TopBarChild", ImVec2(0, 49.0f * style::uiScale), false, ImGuiWindowFlags_HorizontalScrollbar);
     ImVec2 btnSize(30 * style::uiScale, 30 * style::uiScale);
     ImGui::PushID(ImGui::GetID("sdrpp_menu_btn"));
@@ -344,7 +355,8 @@ void MainWindow::draw() {
     ImGui::SameLine();
 
     bool tmpPlaySate = playing;
-    if (playButtonLocked && !tmpPlaySate) { style::beginDisabled(); }
+    bool playControlLocked = (playButtonLocked && !tmpPlaySate) || (core::isSessionLocked() && tmpPlaySate);
+    if (playControlLocked) { style::beginDisabled(); }
     if (playing) {
         ImGui::PushID(ImGui::GetID("sdrpp_stop_btn"));
         if (ImGui::ImageButton(icons::STOP, btnSize, ImVec2(0, 0), ImVec2(1, 1), 5, ImVec4(0, 0, 0, 0), textCol) || ImGui::IsKeyPressed(ImGuiKey_End, false)) {
@@ -359,7 +371,7 @@ void MainWindow::draw() {
         }
         ImGui::PopID();
     }
-    if (playButtonLocked && !tmpPlaySate) { style::endDisabled(); }
+    if (playControlLocked) { style::endDisabled(); }
 
     // Handle auto-start
     if (autostart) {
@@ -375,7 +387,9 @@ void MainWindow::draw() {
     ImGui::SameLine();
 
     ImGui::SetCursorPosY(origY);
+    ImGui::BeginDisabled(core::isTuningLocked());
     gui::freqSelect.draw();
+    ImGui::EndDisabled();
 
     ImGui::SameLine();
 
@@ -434,7 +448,7 @@ void MainWindow::draw() {
     }
 
     // Reset waterfall lock
-    lockWaterfallControls = showCredits;
+    lockWaterfallControls = showCredits || core::isTuningLocked();
 
     // Handle menu resize
     ImVec2 winSize = ImGui::GetWindowSize();
@@ -616,6 +630,7 @@ void MainWindow::draw() {
     ImGui::TextUnformatted("Zoom");
     ImGui::SetCursorPosX((ImGui::GetWindowSize().x / 2.0) - 10 * style::uiScale);
     ImVec2 wfSliderSize(20.0 * style::uiScale, 150.0 * style::uiScale);
+    ImGui::BeginDisabled(core::isTuningLocked());
     if (ImGui::VSliderFloat("##_7_", wfSliderSize, &bw, 1.0, 0.0, "")) {
         double factor = (double)bw * (double)bw;
 
@@ -630,6 +645,7 @@ void MainWindow::draw() {
         }
     }
 
+    ImGui::EndDisabled();
     ImGui::NewLine();
 
     ImGui::SetCursorPosX((ImGui::GetWindowSize().x / 2.0) - (ImGui::CalcTextSize("Max").x / 2.0));
@@ -674,6 +690,7 @@ void MainWindow::draw() {
 }
 
 void MainWindow::setPlayState(bool _playing) {
+    if (!_playing && core::isSessionLocked()) { return; }
     if (_playing == playing) { return; }
     if (_playing) {
         sigpath::iqFrontEnd.flushInputBuffer();

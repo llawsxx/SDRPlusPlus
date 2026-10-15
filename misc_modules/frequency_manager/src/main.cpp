@@ -13,6 +13,8 @@
 #include <utils/freq_formatting.h>
 #include <gui/dialogs/dialog_box.h>
 #include <fstream>
+#include <signal_path/multi_receiver.h>
+#include <cmath>
 
 SDRPP_MOD_INFO{
     /* Name:            */ "frequency_manager",
@@ -105,6 +107,7 @@ public:
 
 private:
     static void applyBookmark(FrequencyBookmark bm, std::string vfoName) {
+        if (core::isTuningLocked()) { return; }
         if (vfoName == "") {
             // TODO: Replace with proper tune call
             gui::waterfall.setCenterFrequency(bm.frequency);
@@ -346,9 +349,88 @@ private:
         config.release(true);
     }
 
+    std::string receiverInterface() {
+        for (const auto& entry : core::moduleManager.instances) {
+            if (std::string(entry.second.module.info->name) == "multi_receiver") { return entry.first; }
+        }
+        return "";
+    }
+
+    void drawReceiverGroups() {
+        if (!ImGui::CollapsingHeader("Multi-channel groups")) { return; }
+        std::string receiver = receiverInterface();
+        if (receiver.empty()) { ImGui::TextWrapped("Enable the Multi Receiver module to use channel groups."); return; }
+        config.acquire();
+        json groups = config.conf.value("receiverGroups", json::object());
+        config.release();
+        ImGui::InputText("Group name", groupName, sizeof(groupName));
+        ImGui::BeginDisabled(core::isTuningLocked());
+        if (ImGui::Button("Save / replace current group")) {
+            json setup;
+            if (!groupName[0]) { groupMessage = "Enter a group name"; }
+            else if (core::modComManager.callInterface(receiver, MULTI_RECEIVER_GET_SETUP, nullptr, &setup)) {
+                config.acquire();
+                config.conf["receiverGroups"][groupName] = setup;
+                config.release(true);
+                selectedGroup = groupName;
+                groupMessage = "Group saved";
+            }
+        }
+        if (ImGui::BeginCombo("Saved groups", selectedGroup.c_str())) {
+            for (const auto& entry : groups.items()) {
+                if (ImGui::Selectable(entry.key().c_str(), selectedGroup == entry.key())) { selectedGroup = entry.key(); }
+            }
+            ImGui::EndCombo();
+        }
+        ImGui::BeginDisabled(!groups.contains(selectedGroup));
+        if (ImGui::Button("Load group")) {
+            json setup = groups[selectedGroup];
+            core::modComManager.callInterface(receiver, MULTI_RECEIVER_LOAD_SETUP, &setup, &groupMessage);
+            if (groupMessage.empty()) { groupMessage = "Group queued for loading"; }
+        }
+        if (ImGui::Button("Delete saved group")) {
+            config.acquire();
+            config.conf["receiverGroups"].erase(selectedGroup);
+            config.release(true);
+            selectedGroup.clear();
+            groupMessage = "Group deleted";
+        }
+        ImGui::EndDisabled();
+        if (ImGui::Button("Open selected bookmarks as channels")) {
+            json entries = json::array();
+            double lower = INFINITY;
+            double upper = -INFINITY;
+            int index = 0;
+            for (const auto& entry : bookmarks) {
+                const auto& bookmark = entry.second;
+                if (!bookmark.selected) { continue; }
+                entries.push_back(json{{"name", "RX " + std::to_string(++index)}, {"frequency", bookmark.frequency},
+                    {"bandwidth", bookmark.bandwidth}, {"mode", bookmark.mode},
+                    {"iqSampleRate", std::ceil(bookmark.bandwidth * 1.25 / 1000.0) * 1000.0}});
+                double center = bookmark.frequency;
+                if (bookmark.mode == RADIO_IFACE_MODE_USB) { center += bookmark.bandwidth / 2; }
+                if (bookmark.mode == RADIO_IFACE_MODE_LSB) { center -= bookmark.bandwidth / 2; }
+                lower = std::min(lower, center - bookmark.bandwidth / 2);
+                upper = std::max(upper, center + bookmark.bandwidth / 2);
+            }
+            if (entries.empty()) { groupMessage = "Select one or more bookmarks first"; }
+            else {
+                json setup{{"version", 1}, {"centerFrequency", (lower + upper) / 2}, {"output", 0}, {"channels", entries}};
+                core::modComManager.callInterface(receiver, MULTI_RECEIVER_LOAD_SETUP, &setup, &groupMessage);
+                if (groupMessage.empty()) { groupMessage = "Selected bookmarks queued as channels"; }
+            }
+        }
+        ImGui::EndDisabled();
+        if (!groupMessage.empty()) { ImGui::TextWrapped("%s", groupMessage.c_str()); }
+        std::string receiverError;
+        core::modComManager.callInterface(receiver, MULTI_RECEIVER_GET_ERROR, nullptr, &receiverError);
+        if (!receiverError.empty()) { ImGui::TextColored(ImVec4(1, 0.2f, 0.2f, 1), "%s", receiverError.c_str()); }
+    }
+
     static void menuHandler(void* ctx) {
         FrequencyManagerModule* _this = (FrequencyManagerModule*)ctx;
         float menuWidth = ImGui::GetContentRegionAvail().x;
+        _this->drawReceiverGroups();
 
         // TODO: Replace with something that won't iterate every frame
         std::vector<std::string> selectedNames;
@@ -814,6 +896,9 @@ private:
     std::vector<std::string> listNames;
     std::string listNamesTxt = "";
     std::string selectedListName = "";
+    char groupName[128] = "Group 1";
+    std::string selectedGroup;
+    std::string groupMessage;
     int selectedListId = 0;
 
     std::string editedListName;

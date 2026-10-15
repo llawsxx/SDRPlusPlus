@@ -14,6 +14,10 @@
 #include <filesystem>
 #include <gui/menus/theme.h>
 #include <backend.h>
+#include <atomic>
+#ifdef __ANDROID__
+#include <android_backend.h>
+#endif
 
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include <stb_image_resize.h>
@@ -37,8 +41,36 @@ namespace core {
     ModuleManager moduleManager;
     ModuleComManager modComManager;
     CommandArgsParser args;
+    Event<int> onFrame;
+    static std::mutex recordingErrorMutex;
+    static std::string lastRecordingError;
+
+    void reportRecordingError(const std::string& message) {
+        std::lock_guard<std::mutex> lock(recordingErrorMutex);
+        lastRecordingError = message;
+        if (!message.empty()) { flog::error("Recording: {0}", message); }
+    }
+
+    std::string recordingError() {
+        std::lock_guard<std::mutex> lock(recordingErrorMutex);
+        return lastRecordingError;
+    }
+    static std::atomic<bool> sessionLocked{false};
+    static std::atomic<int> tuningLocks{0};
+
+    bool isSessionLocked() { return sessionLocked.load(); }
+    bool isTuningLocked() { return sessionLocked.load() || tuningLocks.load() > 0; }
+    void retainTuningLock() { tuningLocks.fetch_add(1); }
+    void releaseTuningLock() { tuningLocks.fetch_sub(1); }
+    void setSessionLocked(bool locked) {
+        sessionLocked.store(locked);
+#ifdef __ANDROID__
+        backend::setSessionLocked(locked);
+#endif
+    }
 
     void setInputSampleRate(double samplerate) {
+        if (isTuningLocked()) { return; }
         // Forward this to the server
         if (args["server"].b()) { server::setInputSampleRate(samplerate); return; }
         
@@ -216,6 +248,9 @@ int sdrpp_main(int argc, char* argv[]) {
     defConfig["moduleInstances"]["Network Sink"] = "network_sink";
 
     defConfig["moduleInstances"]["Radio"] = "radio";
+#ifdef SDRPP_HAS_MULTI_RECEIVER
+    defConfig["moduleInstances"]["Multi Receiver"] = "multi_receiver";
+#endif
 
     defConfig["moduleInstances"]["Frequency Manager"] = "frequency_manager";
     defConfig["moduleInstances"]["Recorder"] = "recorder";
@@ -316,6 +351,9 @@ int sdrpp_main(int argc, char* argv[]) {
 
     core::configManager.conf["modules"][modCount++] = "frequency_manager.so";
     core::configManager.conf["modules"][modCount++] = "recorder.so";
+#ifdef SDRPP_HAS_MULTI_RECEIVER
+    core::configManager.conf["modules"][modCount++] = "multi_receiver.so";
+#endif
     core::configManager.conf["modules"][modCount++] = "rigctl_server.so";
     core::configManager.conf["modules"][modCount++] = "scanner.so";
 #endif
@@ -329,6 +367,12 @@ int sdrpp_main(int argc, char* argv[]) {
     }
 
     // Remove unused elements
+#ifdef SDRPP_HAS_MULTI_RECEIVER
+    if (!core::configManager.conf["moduleInstances"].contains("Multi Receiver")) {
+        core::configManager.conf["moduleInstances"]["Multi Receiver"] = defConfig["moduleInstances"]["Multi Receiver"];
+    }
+#endif
+
     auto items = core::configManager.conf.items();
     auto newConf = core::configManager.conf;
     bool configCorrected = false;

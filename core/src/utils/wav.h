@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <mutex>
 #include "riff.h"
+#include <chrono>
 
 namespace wav {    
     #pragma pack(push, 1)
@@ -48,7 +49,10 @@ namespace wav {
         void setFormat(Format format);
         void setSampleType(SampleType type);
 
-        size_t getSamplesWritten() { return samplesWritten; }
+        size_t getSamplesWritten();
+        uint64_t getBytesWritten();
+        std::string getError();
+        double secondsSinceWrite();
 
         void write(float* samples, int count);
 
@@ -61,7 +65,9 @@ namespace wav {
         uint64_t _samplerate;
         Format _format;
         SampleType _type;
-        size_t bytesPerSamp;
+        size_t bytesPerSamp = 0;
+        size_t lastFlushSamples = 0;
+        std::chrono::steady_clock::time_point lastWrite;
 
         uint8_t* bufU8 = NULL;
         int16_t* bufI16 = NULL;

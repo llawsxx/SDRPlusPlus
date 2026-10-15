@@ -63,6 +63,7 @@ public:
         bool running = false;
 
         float guiVolume = 1.0f;
+        float monitorGain = 1.0f;
     };
 
     struct SinkProvider {
@@ -100,6 +101,8 @@ public:
     float getStreamSampleRate(std::string name);
 
     void setStreamSink(std::string name, std::string providerName);
+    void setMonitorSelection(const std::vector<std::string>& names);
+    void clearMonitorSelection();
 
     void showVolumeSlider(std::string name, std::string prefix, float width, float btnHeight = -1.0f, int btnBorder = 0, bool sameLine = false);
 
@@ -123,6 +126,9 @@ private:
     void loadStreamConfig(std::string name);
     void saveStreamConfig(std::string name);
     void refreshProviders();
+    void applyMonitorSelection();
+    std::vector<std::string> monitorSelection;
+    bool monitorSelectionActive = false;
 
     std::map<std::string, SinkProvider> providers;
     std::map<std::string, Stream*> streams;

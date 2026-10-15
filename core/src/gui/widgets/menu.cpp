@@ -2,6 +2,7 @@
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
 #include <gui/style.h>
+#include <core.h>
 
 Menu::Menu() {
 }
@@ -109,7 +110,7 @@ bool Menu::draw(bool updateStates) {
                 ImGui::SetCursorPosY(pos.y + checkboxOffset.y);
                 bool enabled = item.inst->isEnabled();
                 if (ImGui::Checkbox(("##_menu_checkbox_" + opt.name).c_str(), &enabled)) {
-                    enabled ? item.inst->enable() : item.inst->disable();
+                    if (!core::isTuningLocked()) { enabled ? item.inst->enable() : item.inst->disable(); }
                     changed = true;
                 }
                 ImGui::SetCursorPos(pos);
@@ -131,7 +132,7 @@ bool Menu::draw(bool updateStates) {
             ImGui::SetCursorPosY(pos.y + checkboxOffset.y);
             bool enabled = item.inst->isEnabled();
             if (ImGui::Checkbox(("##_menu_checkbox_" + opt.name).c_str(), &enabled)) {
-                enabled ? item.inst->enable() : item.inst->disable();
+                if (!core::isTuningLocked()) { enabled ? item.inst->enable() : item.inst->disable(); }
                 changed = true;
             }
             ImGui::SetCursorPos(pos);

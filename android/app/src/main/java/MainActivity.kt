@@ -9,10 +9,13 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.pm.PackageManager;
+import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.hardware.usb.*;
 import android.Manifest;
 import android.os.Bundle;
+import android.net.Uri;
+import android.provider.DocumentsContract;
 import android.view.KeyEvent;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
@@ -30,6 +33,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.io.*;
 
 private const val ACTION_USB_PERMISSION = "org.sdrpp.sdrpp.USB_PERMISSION";
+private const val RECORDING_DIRECTORY_REQUEST = 7101;
 
 private val usbReceiver = object : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -57,6 +61,95 @@ private val usbReceiver = object : BroadcastReceiver() {
 }
 
 class MainActivity : NativeActivity() {
+    @Volatile private var sessionLocked = false;
+    @Volatile private var recordingDirectoryResult = "";
+    @Volatile private var recordingError = "";
+
+    fun setSessionLocked(locked: Boolean) {
+        sessionLocked = locked;
+        runOnUiThread {
+            requestedOrientation = if (locked) ActivityInfo.SCREEN_ORIENTATION_LOCKED else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
+            if (locked) {
+                window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            } else {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            }
+        }
+    }
+
+    override fun onBackPressed() {
+        if (!sessionLocked) { super.onBackPressed(); }
+    }
+
+    fun chooseRecordingDirectory() {
+        recordingDirectoryResult = "";
+        runOnUiThread {
+            try {
+                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+                    getPreferences(MODE_PRIVATE).getString("recordingTree", null)?.let {
+                        putExtra(DocumentsContract.EXTRA_INITIAL_URI, Uri.parse(it));
+                    }
+                };
+                startActivityForResult(intent, RECORDING_DIRECTORY_REQUEST);
+            } catch (error: Exception) {
+                recordingDirectoryResult = "error: " + (error.message ?: error.javaClass.simpleName);
+            }
+        }
+    }
+
+    fun getRecordingDirectoryResult(): String = recordingDirectoryResult;
+    fun getRecordingError(): String = recordingError;
+
+    fun canWriteRecordingDirectory(tree: String): Boolean {
+        return try {
+            val uri = Uri.parse(tree);
+            contentResolver.persistedUriPermissions.any { it.uri == uri && it.isWritePermission };
+        } catch (error: Exception) {
+            false;
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != RECORDING_DIRECTORY_REQUEST) { return; }
+        if (resultCode != RESULT_OK || data?.data == null) {
+            recordingDirectoryResult = "cancelled";
+            return;
+        }
+        try {
+            val uri = data.data!!;
+            val flags = data.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            contentResolver.takePersistableUriPermission(uri, flags);
+            if (!canWriteRecordingDirectory(uri.toString())) { throw IOException("Directory is not writable"); }
+            getPreferences(MODE_PRIVATE).edit().putString("recordingTree", uri.toString()).apply();
+            recordingDirectoryResult = uri.toString();
+        } catch (error: Exception) {
+            recordingDirectoryResult = "error: " + (error.message ?: error.javaClass.simpleName);
+        }
+    }
+
+    fun openRecordingDocument(tree: String, filename: String): Int {
+        recordingError = "";
+        return try {
+            val treeUri = Uri.parse(tree);
+            val parent = DocumentsContract.buildDocumentUriUsingTree(treeUri, DocumentsContract.getTreeDocumentId(treeUri));
+            val document = DocumentsContract.createDocument(contentResolver, parent, "audio/wav", filename)
+                ?: throw IOException("Could not create recording file");
+            try {
+                val descriptor = contentResolver.openFileDescriptor(document, "rw")
+                    ?: throw IOException("Could not open recording file");
+                descriptor.use { it.detachFd() };
+            } catch (error: Exception) {
+                DocumentsContract.deleteDocument(contentResolver, document);
+                throw error;
+            }
+        } catch (error: Exception) {
+            recordingError = error.message ?: error.javaClass.simpleName;
+            -1;
+        }
+    }
+
     private val TAG : String = "SDR++";
     public var usbManager : UsbManager? = null;
     public var SDR_device : UsbDevice? = null;

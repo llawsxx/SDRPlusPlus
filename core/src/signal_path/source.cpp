@@ -3,6 +3,7 @@
 #include <utils/flog.h>
 #include <signal_path/signal_path.h>
 #include <core.h>
+#include <gui/gui.h>
 
 SourceManager::SourceManager() {
 }
@@ -40,6 +41,7 @@ std::vector<std::string> SourceManager::getSourceNames() {
 }
 
 void SourceManager::selectSource(std::string name) {
+    if (core::isTuningLocked()) { return; }
     if (sources.find(name) == sources.end()) {
         flog::error("Tried to select non existent source: {0}", name);
         return;
@@ -63,7 +65,9 @@ void SourceManager::showSelectedMenu() {
     if (selectedHandler == NULL) {
         return;
     }
+    ImGui::BeginDisabled(core::isTuningLocked());
     selectedHandler->menuHandler(selectedHandler->ctx);
+    ImGui::EndDisabled();
 }
 
 void SourceManager::start() {
@@ -74,6 +78,7 @@ void SourceManager::start() {
 }
 
 void SourceManager::stop() {
+    if (core::isSessionLocked()) { return; }
     if (selectedHandler == NULL) {
         return;
     }
@@ -81,6 +86,7 @@ void SourceManager::stop() {
 }
 
 void SourceManager::tune(double freq) {
+    if (core::isTuningLocked() && freq != currentFreq) { return; }
     if (selectedHandler == NULL) {
         return;
     }
@@ -91,16 +97,19 @@ void SourceManager::tune(double freq) {
 }
 
 void SourceManager::setTuningOffset(double offset) {
+    if (core::isTuningLocked()) { return; }
     tuneOffset = offset;
     tune(currentFreq);
 }
 
 void SourceManager::setTuningMode(TuningMode mode) {
+    if (core::isTuningLocked()) { return; }
     tuneMode = mode;
     tune(currentFreq);
 }
 
 void SourceManager::setPanadapterIF(double freq) {
+    if (core::isTuningLocked()) { return; }
     ifFreq = freq;
     tune(currentFreq);
 }

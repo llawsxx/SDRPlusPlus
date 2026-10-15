@@ -4,6 +4,7 @@
 #include <string>
 #include <stack>
 #include <stdint.h>
+#include "recording_file.h"
 
 namespace riff {
 #pragma pack(push, 1)
@@ -35,13 +36,16 @@ namespace riff {
         void endChunk();
 
         void write(const uint8_t* data, size_t len);
+        bool flush();
+        std::string error();
+        void fail(const std::string& message);
 
     private:
         void beginRIFF(const char form[4]);
         void endRIFF();
 
         std::recursive_mutex mtx;
-        std::ofstream file;
+        recording::File file;
         std::stack<ChunkDesc> chunks;
     };
 

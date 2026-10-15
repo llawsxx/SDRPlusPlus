@@ -47,6 +47,7 @@ namespace module_manager_menu {
             ImGui::TableHeadersRow();
 
             for (auto& [name, inst] : core::moduleManager.instances) {
+                if (inst.transient) { continue; }
                 ImGui::TableNextRow();
 
                 ImGui::TableSetColumnIndex(0);
@@ -116,6 +117,7 @@ namespace module_manager_menu {
             core::configManager.acquire();
             json instances;
             for (auto [_name, inst] : core::moduleManager.instances) {
+                if (inst.transient) { continue; }
                 instances[_name]["module"] = inst.module.info->name;
                 instances[_name]["enabled"] = inst.instance->isEnabled();
             }

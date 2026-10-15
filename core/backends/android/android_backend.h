@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 #include <stdint.h>
+#include <string>
 
 namespace backend {
     struct DevVIDPID {
@@ -15,4 +16,10 @@ namespace backend {
     extern const std::vector<DevVIDPID> RTL_SDR_VIDPIDS;
 
     int getDeviceFD(int& vid, int& pid, const std::vector<DevVIDPID>& allowedVidPids);
+    void setSessionLocked(bool locked);
+    void chooseRecordingDirectory();
+    std::string recordingDirectoryResult();
+    bool canWriteRecordingDirectory(const std::string& uri);
+    int openRecordingDocument(const std::string& tree, const std::string& filename);
+    std::string recordingError();
 }
