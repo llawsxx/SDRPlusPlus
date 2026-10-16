@@ -13,13 +13,11 @@ import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.hardware.usb.*;
 import android.Manifest;
-import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Build;
 import android.net.Uri;
 import android.provider.DocumentsContract;
 import android.view.KeyEvent;
-import android.view.View;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.util.Log;
@@ -41,6 +39,12 @@ private const val ACTION_USB_PERMISSION = "org.sdrpp.sdrpp.USB_PERMISSION";
 private const val RECORDING_DIRECTORY_REQUEST = 7101;
 
 class MainActivity : NativeActivity() {
+    companion object {
+        init {
+            System.loadLibrary("sdrpp_core");
+        }
+    }
+
     private var usbReceiverRegistered = false;
     private val requestedUsbDevices = mutableSetOf<String>();
     private val supportedUsbDevices by lazy {
@@ -247,12 +251,7 @@ class MainActivity : NativeActivity() {
     }
 
     public fun hideSystemBars() {
-        val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE;
-        if (isLandscape) {
-            window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-        } else {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-        }
+        window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
         WindowCompat.setDecorFitsSystemWindows(window, Build.VERSION.SDK_INT < 35);
         window.attributes = window.attributes.apply {
             layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER;
@@ -260,27 +259,28 @@ class MainActivity : NativeActivity() {
         WindowCompat.getInsetsController(window, window.decorView).apply {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE;
             isAppearanceLightStatusBars = false;
-            if (isLandscape) {
-                hide(WindowInsetsCompat.Type.statusBars());
-            } else {
-                show(WindowInsetsCompat.Type.statusBars());
-            }
-            hide(WindowInsetsCompat.Type.navigationBars());
+            hide(WindowInsetsCompat.Type.systemBars());
         };
     }
 
     private fun configureWindowInsets() {
         if (Build.VERSION.SDK_INT < 35) { return; }
-        val content = findViewById<View>(android.R.id.content);
-        content.setBackgroundColor(Color.BLACK);
-        ViewCompat.setOnApplyWindowInsetsListener(content) { view, windowInsets ->
+        val decor = window.decorView;
+        ViewCompat.setOnApplyWindowInsetsListener(decor) { view, windowInsets ->
             val safeArea = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars() or
                 WindowInsetsCompat.Type.displayCutout() or WindowInsetsCompat.Type.ime());
-            view.setPadding(safeArea.left, safeArea.top, safeArea.right, safeArea.bottom);
+            setNativeWindowInsets(safeArea.left, safeArea.top, safeArea.right, safeArea.bottom, view.width, view.height);
             WindowInsetsCompat.CONSUMED;
         };
-        ViewCompat.requestApplyInsets(content);
+        decor.addOnLayoutChangeListener { view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+            if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop) {
+                ViewCompat.requestApplyInsets(view);
+            }
+        };
+        ViewCompat.requestApplyInsets(decor);
     }
+
+    private external fun setNativeWindowInsets(left: Int, top: Int, right: Int, bottom: Int, width: Int, height: Int);
 
     public override fun onCreate(savedInstanceState: Bundle?) {
         // Hide bars

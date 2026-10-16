@@ -36,6 +36,8 @@
 static double                                   g_Time = 0.0;
 static ANativeWindow*                           g_Window;
 static char                                     g_LogTag[] = "ImGuiExample";
+static int32_t                                  g_InputOffsetLeft = 0;
+static int32_t                                  g_InputOffsetTop = 0;
 
 static ImGuiKey ImGui_ImplAndroid_KeyCodeToImGuiKey(int32_t key_code)
 {
@@ -207,7 +209,7 @@ int32_t ImGui_ImplAndroid_HandleInputEvent(AInputEvent* input_event)
             || (AMotionEvent_getToolType(input_event, event_pointer_index) == AMOTION_EVENT_TOOL_TYPE_MOUSE)
             || (AMotionEvent_getToolType(input_event, event_pointer_index) == AMOTION_EVENT_TOOL_TYPE_UNKNOWN))
             {
-                io.AddMousePosEvent(AMotionEvent_getX(input_event, event_pointer_index), AMotionEvent_getY(input_event, event_pointer_index));
+                io.AddMousePosEvent(AMotionEvent_getX(input_event, event_pointer_index) - g_InputOffsetLeft, AMotionEvent_getY(input_event, event_pointer_index) - g_InputOffsetTop);
                 io.AddMouseButtonEvent(0, event_action == AMOTION_EVENT_ACTION_DOWN);
             }
             break;
@@ -222,7 +224,7 @@ int32_t ImGui_ImplAndroid_HandleInputEvent(AInputEvent* input_event)
             break;
         case AMOTION_EVENT_ACTION_HOVER_MOVE: // Hovering: Tool moves while NOT pressed (such as a physical mouse)
         case AMOTION_EVENT_ACTION_MOVE:       // Touch pointer moves while DOWN
-            io.AddMousePosEvent(AMotionEvent_getX(input_event, event_pointer_index), AMotionEvent_getY(input_event, event_pointer_index));
+            io.AddMousePosEvent(AMotionEvent_getX(input_event, event_pointer_index) - g_InputOffsetLeft, AMotionEvent_getY(input_event, event_pointer_index) - g_InputOffsetTop);
             break;
         case AMOTION_EVENT_ACTION_SCROLL:
             io.AddMouseWheelEvent(AMotionEvent_getAxisValue(input_event, AMOTION_EVENT_AXIS_HSCROLL, event_pointer_index), AMotionEvent_getAxisValue(input_event, AMOTION_EVENT_AXIS_VSCROLL, event_pointer_index));
@@ -237,6 +239,12 @@ int32_t ImGui_ImplAndroid_HandleInputEvent(AInputEvent* input_event)
     }
 
     return 0;
+}
+
+void ImGui_ImplAndroid_SetInputOffset(int32_t left, int32_t top)
+{
+    g_InputOffsetLeft = left;
+    g_InputOffsetTop = top;
 }
 
 bool ImGui_ImplAndroid_Init(ANativeWindow* window)

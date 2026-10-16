@@ -36,8 +36,10 @@ The signed debug APK is `app/build/outputs/apk/debug/app-debug.apk`.
 Release builds still require your own release signing configuration.
 The minimum SDK is 28 (Android 9); the compile and target SDK are 36.
 Release lint remains enabled without a baseline or target-SDK suppression.
-Android 15 and newer use explicit window insets to keep the native UI clear of
-the status bar and display cutouts. Legacy storage permissions are only requested
+Android 15 and newer pass window insets to the native renderer to keep drawing
+and touch coordinates clear of display cutouts and the on-screen keyboard.
+Earlier Android versions keep system-managed window fitting.
+Legacy storage permissions are only requested
 on older Android versions; recording to shared storage uses the system folder
 picker instead.
 
@@ -151,8 +153,10 @@ selection, the app follows the system orientation policy. The old independent
 orientation-lock setting is no longer used. The main **Lock** holds the current
 orientation and disables this button; unlocking restores the selected direction.
 Rotation keeps the existing activity/native receiver alive and does not
-intentionally stop the SDR or recordings. Portrait keeps the status bar visible;
-landscape hides it, and menu placement follows the existing responsive layout.
+intentionally stop the SDR or recordings. Both orientations hide the status and
+navigation bars while keeping the UI clear of display cutouts. Swiping from an
+edge temporarily reveals the system bars. Menu placement follows the existing
+responsive layout.
 
 **Keep screen on**, below the Lock/orientation row, independently prevents the
 foreground app's screen from timing out. It defaults to off and is remembered

@@ -63,6 +63,38 @@ class AndroidConfigurationChecks(unittest.TestCase):
             properties["android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY"], "true"
         )
 
+    def test_native_callbacks_have_explicit_java_library_load(self):
+        activity = (ROOT / "android/app/src/main/java/MainActivity.kt").read_text(encoding="utf-8")
+        self.assertRegex(activity, r'class MainActivity : NativeActivity\(\) \{\s+companion object \{\s+init \{\s+System\.loadLibrary\("sdrpp_core"\);')
+
+    def test_both_orientations_hide_system_bars(self):
+        activity = (ROOT / "android/app/src/main/java/MainActivity.kt").read_text(encoding="utf-8")
+        method = activity.split("public fun hideSystemBars() {", 1)[1].split("private fun configureWindowInsets()", 1)[0]
+        self.assertIn("window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)", method)
+        self.assertIn("hide(WindowInsetsCompat.Type.systemBars())", method)
+        self.assertIn("BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE", method)
+        self.assertNotIn("isLandscape", method)
+        self.assertNotIn("show(WindowInsetsCompat.Type.statusBars())", method)
+        self.assertNotIn("clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)", method)
+
+    def test_window_insets_reach_native_rendering_and_input(self):
+        activity = (ROOT / "android/app/src/main/java/MainActivity.kt").read_text(encoding="utf-8")
+        backend = (ROOT / "core/backends/android/backend.cpp").read_text(encoding="utf-8")
+        inputs = (ROOT / "core/backends/android/imgui/imgui_impl_android.cpp").read_text(encoding="utf-8")
+        self.assertIn("private external fun setNativeWindowInsets(", activity)
+        self.assertIn("setNativeWindowInsets(safeArea.left, safeArea.top, safeArea.right, safeArea.bottom, view.width, view.height)", activity)
+        self.assertNotIn("view.setPadding(safeArea", activity)
+        self.assertIn("WindowInsetsCompat.Type.displayCutout()", activity)
+        self.assertIn("WindowInsetsCompat.Type.ime()", activity)
+        self.assertIn("decor.addOnLayoutChangeListener", activity)
+        self.assertIn("Java_org_sdrpp_sdrpp_MainActivity_setNativeWindowInsets", backend)
+        self.assertIn("ImGui::GetIO().DisplaySize = ImVec2(windowContentArea.width, windowContentArea.height)", backend)
+        self.assertIn("drawData->DisplayPos = ImVec2(-windowContentArea.left, -windowContentArea.top)", backend)
+        self.assertIn("drawData->DisplaySize = surfaceSize", backend)
+        self.assertIn("ImGui_ImplAndroid_SetInputOffset(windowContentArea.left, windowContentArea.top)", backend)
+        self.assertEqual(inputs.count("AMotionEvent_getX(input_event, event_pointer_index) - g_InputOffsetLeft"), 2)
+        self.assertEqual(inputs.count("AMotionEvent_getY(input_event, event_pointer_index) - g_InputOffsetTop"), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

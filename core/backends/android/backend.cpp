@@ -1,5 +1,6 @@
 #include <backend.h>log
 #include "android_backend.h"
+#include "window_insets.h"
 #include <core.h>
 #include <gui/gui.h>
 #include "imgui.h"
@@ -15,6 +16,7 @@
 #include <gui/style.h>
 #include <gui/menus/theme.h>
 #include <filesystem>
+#include <mutex>
 
 // Credit to the ImGui android OpenGL3 example for a lot of this code!
 
@@ -28,6 +30,22 @@ namespace backend {
     bool initialized = false;
     bool pauseRendering = false;
     bool exited = false;
+    std::mutex windowInsetsMutex;
+    WindowInsets windowInsets;
+    WindowContentArea windowContentArea;
+    ImVec2 surfaceSize;
+
+    void updateWindowContentArea() {
+        if (!app || !app->window) { return; }
+        int width = ANativeWindow_getWidth(app->window);
+        int height = ANativeWindow_getHeight(app->window);
+        {
+            std::lock_guard<std::mutex> lock(windowInsetsMutex);
+            windowContentArea = windowInsets.contentArea(width, height);
+        }
+        surfaceSize = ImVec2(width, height);
+        ImGui_ImplAndroid_SetInputOffset(windowContentArea.left, windowContentArea.top);
+    }
 
     // Forward declaration
     int ShowSoftKeyboardInput();
@@ -71,6 +89,7 @@ namespace backend {
     }
 
     int32_t handleInputEvent(struct android_app* app, AInputEvent* inputEvent) {
+        updateWindowContentArea();
         return ImGui_ImplAndroid_HandleInputEvent(inputEvent);
     }
 
@@ -154,17 +173,34 @@ namespace backend {
         // Start the Dear ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplAndroid_NewFrame();
+        updateWindowContentArea();
+        ImGui::GetIO().DisplaySize = ImVec2(windowContentArea.width, windowContentArea.height);
         ImGui::NewFrame();
     }
 
     void render(bool vsync) {
         // Rendering
         ImGui::Render();
-        auto dSize = ImGui::GetIO().DisplaySize;
-        glViewport(0, 0, dSize.x, dSize.y);
+        glViewport(0, 0, surfaceSize.x, surfaceSize.y);
+        glDisable(GL_SCISSOR_TEST);
+        glClearColor(0, 0, 0, 1);
+        glClear(GL_COLOR_BUFFER_BIT);
+        glEnable(GL_SCISSOR_TEST);
+        glScissor(windowContentArea.left, static_cast<int>(surfaceSize.y) - windowContentArea.top - windowContentArea.height,
+            windowContentArea.width, windowContentArea.height);
         glClearColor(gui::themeManager.clearColor.x, gui::themeManager.clearColor.y, gui::themeManager.clearColor.z, gui::themeManager.clearColor.w);
         glClear(GL_COLOR_BUFFER_BIT);
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        glDisable(GL_SCISSOR_TEST);
+        auto* drawData = ImGui::GetDrawData();
+        auto displayPos = drawData->DisplayPos;
+        auto displaySize = drawData->DisplaySize;
+        if (displaySize.x > 0 && displaySize.y > 0) {
+            drawData->DisplayPos = ImVec2(-windowContentArea.left, -windowContentArea.top);
+            drawData->DisplaySize = surfaceSize;
+            ImGui_ImplOpenGL3_RenderDrawData(drawData);
+            drawData->DisplayPos = displayPos;
+            drawData->DisplaySize = displaySize;
+        }
         eglSwapBuffers(_EglDisplay, _EglSurface);
     }
 
@@ -197,7 +233,6 @@ namespace backend {
             if (!pauseRendering) {
                 // Initiate a new frame
                 ImGuiIO& io = ImGui::GetIO();
-                auto dsize = io.DisplaySize;
 
                 // Poll Unicode characters via JNI
                 // FIXME: do not call this every frame because of JNI overhead
@@ -211,6 +246,7 @@ namespace backend {
 
                 // Render
                 beginFrame();
+                auto dsize = io.DisplaySize;
                 
                 if (dsize.x > 0 && dsize.y > 0) {
                     ImGui::SetNextWindowPos(ImVec2(0, 0));
@@ -460,6 +496,12 @@ namespace backend {
 }
 
 extern "C" {
+    JNIEXPORT void JNICALL Java_org_sdrpp_sdrpp_MainActivity_setNativeWindowInsets(
+        JNIEnv*, jobject, jint left, jint top, jint right, jint bottom, jint width, jint height) {
+        std::lock_guard<std::mutex> lock(backend::windowInsetsMutex);
+        backend::windowInsets = {left, top, right, bottom, width, height};
+    }
+
     void android_main(struct android_app* app) {
         // Save app instance
         app->onAppCmd = backend::handleAppCmd;
