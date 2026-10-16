@@ -232,6 +232,8 @@ namespace ImGui {
         void processInputs();
         bool drawTuningControls();
         bool drawTuningControl(const ImRect& bounds, int control, WaterfallVFO* vfo);
+        float getFFTChromeHeight() const;
+        int clampFFTHeight(int height) const;
         void onPositionChange();
         void onResize();
         void updateWaterfallFb();

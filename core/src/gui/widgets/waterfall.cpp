@@ -3,6 +3,7 @@
 #include <imgui_internal.h>
 #include <imutils.h>
 #include <algorithm>
+#include <cmath>
 #include <volk/volk.h>
 #include <utils/flog.h>
 #include <gui/gui.h>
@@ -261,7 +262,11 @@ namespace ImGui {
         bool mouseClicked = ImGui::ButtonBehavior(ImRect(fftAreaMin, wfMax), GetID("WaterfallID"), &mouseHovered, &mouseHeld,
                                                   ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_PressedOnClick);
 
-        mouseInFFTResize = (dragOrigin.x > widgetPos.x && dragOrigin.x < widgetPos.x + widgetSize.x && dragOrigin.y >= widgetPos.y + newFFTAreaHeight - (2.0f * style::uiScale) && dragOrigin.y <= widgetPos.y + newFFTAreaHeight + (2.0f * style::uiScale));
+        ImVec2 resizeOrigin = ImGui::IsMouseDown(ImGuiMouseButton_Left) ? ImGui::GetIO().MouseClickedPos[ImGuiMouseButton_Left] : mousePos;
+        mouseInFFTResize = waterfallVisible && (fftResizeSelect ||
+            (ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
+             resizeOrigin.x > widgetPos.x && resizeOrigin.x < widgetEndPos.x &&
+             std::abs(resizeOrigin.y - wfMin.y) <= 8.0f * style::uiScale));
         mouseInFreq = IS_IN_AREA(dragOrigin, freqAreaMin, freqAreaMax);
         mouseInFFT = IS_IN_AREA(dragOrigin, fftAreaMin, fftAreaMax);
         mouseInWaterfall = IS_IN_AREA(dragOrigin, wfMin, wfMax);
@@ -279,7 +284,7 @@ namespace ImGui {
         // Deselect everything if the mouse is released
         if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
             if (fftResizeSelect) {
-                FFTAreaHeight = newFFTAreaHeight;
+                FFTAreaHeight = clampFFTHeight(FFTAreaHeight + static_cast<int>(std::round(mousePos.y - mouseDownPos.y)));
                 onResize();
             }
 
@@ -297,14 +302,13 @@ namespace ImGui {
             ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
             if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
                 fftResizeSelect = true;
+                mouseDownPos = mousePos;
                 targetFound = true;
             }
         }
 
         // If mouse was clicked inside the central part, check what was clicked
         if (mouseClicked && !targetFound) {
-            mouseDownPos = mousePos;
-
             // First, check if a VFO border was selected
             for (auto const& [name, _vfo] : vfos) {
                 if (_vfo->bandwidthLocked) { continue; }
@@ -346,9 +350,9 @@ namespace ImGui {
         // If the FFT resize bar was selected, resize FFT accordingly
         if (fftResizeSelect) {
             ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
-            newFFTAreaHeight = mousePos.y - widgetPos.y;
-            newFFTAreaHeight = std::clamp<float>(newFFTAreaHeight, 150, widgetSize.y - 50);
-            ImGui::GetForegroundDrawList()->AddLine(ImVec2(widgetPos.x, newFFTAreaHeight + widgetPos.y), ImVec2(widgetEndPos.x, newFFTAreaHeight + widgetPos.y),
+            newFFTAreaHeight = clampFFTHeight(FFTAreaHeight + static_cast<int>(std::round(mousePos.y - mouseDownPos.y)));
+            float divider = wfMin.y + newFFTAreaHeight - FFTAreaHeight;
+            ImGui::GetForegroundDrawList()->AddLine(ImVec2(widgetPos.x, divider), ImVec2(widgetEndPos.x, divider),
                                                     ImGui::GetColorU32(ImGuiCol_SeparatorActive), style::uiScale);
             return;
         }
@@ -701,6 +705,19 @@ namespace ImGui {
         // Nothing to see here...
     }
 
+    float WaterFall::getFFTChromeHeight() const {
+        float tuningHeight = std::max(48.0f * style::uiScale, 2 * ImGui::GetTextLineHeight() + 12.0f * style::uiScale);
+        return 49.0f * style::uiScale + tuningHeight + 2;
+    }
+
+    int WaterFall::clampFFTHeight(int height) const {
+        float chromeHeight = getFFTChromeHeight();
+        int maximum = std::max(static_cast<int>(std::ceil(chromeHeight)) + 1,
+            static_cast<int>(widgetSize.y - 50.0f * style::uiScale - 2));
+        int minimum = std::min(maximum, static_cast<int>(std::ceil(chromeHeight + 100.0f * style::uiScale)));
+        return std::clamp(height, minimum, maximum);
+    }
+
     void WaterFall::onResize() {
         std::lock_guard<std::recursive_mutex> lck(latestFFTMtx);
         std::lock_guard<std::mutex> lck2(smoothingBufMtx);
@@ -712,14 +729,15 @@ namespace ImGui {
         int lastWaterfallHeight = waterfallHeight;
 
         float tuningHeight = std::max(48.0f * style::uiScale, 2 * ImGui::GetTextLineHeight() + 12.0f * style::uiScale);
+        float chromeHeight = getFFTChromeHeight();
         if (waterfallVisible) {
-            FFTAreaHeight = std::min<int>(FFTAreaHeight, widgetSize.y - (50.0f * style::uiScale));
+            FFTAreaHeight = clampFFTHeight(FFTAreaHeight);
             newFFTAreaHeight = FFTAreaHeight;
-            fftHeight = std::max(1, static_cast<int>(FFTAreaHeight - (50.0f * style::uiScale) - tuningHeight));
-            waterfallHeight = std::max(0, static_cast<int>(widgetSize.y - fftHeight - (50.0f * style::uiScale) - tuningHeight - 2));
+            fftHeight = std::max(1, static_cast<int>(FFTAreaHeight - chromeHeight));
+            waterfallHeight = std::max(1, static_cast<int>(widgetSize.y - fftHeight - chromeHeight - 2));
         }
         else {
-            fftHeight = std::max(1, static_cast<int>(widgetSize.y - (50.0f * style::uiScale) - tuningHeight));
+            fftHeight = std::max(1, static_cast<int>(widgetSize.y - chromeHeight - 2));
         }
         dataWidth = widgetSize.x - (60.0f * style::uiScale);
 
@@ -827,7 +845,7 @@ namespace ImGui {
         window->DrawList->AddRect(widgetPos, widgetEndPos, IM_COL32(50, 50, 50, 255), 0.0, 0, style::uiScale);
         window->DrawList->AddLine(ImVec2(widgetPos.x, freqAreaMax.y), ImVec2(widgetPos.x + widgetSize.x, freqAreaMax.y), IM_COL32(50, 50, 50, 255), style::uiScale);
 
-        inputHandled = drawTuningControls();
+        inputHandled = drawTuningControls() && !fftResizeSelect;
         if (inputHandled) {
             mouseInFFT = mouseInWaterfall = mouseInFreq = mouseInFFTResize = false;
         }
@@ -843,7 +861,7 @@ namespace ImGui {
             args.highFreq = upperFreq;
             args.freqToPixelRatio = (double)dataWidth / viewBandwidth;
             args.pixelToFreqRatio = viewBandwidth / (double)dataWidth;
-            onInputProcess.emit(args);
+            if (!fftResizeSelect) { onInputProcess.emit(args); }
             if (!inputHandled) { processInputs(); }
         }
 
