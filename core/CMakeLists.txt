@@ -38,6 +38,9 @@ endif()
 
 # Set compiler options
 target_compile_options(sdrpp_core PRIVATE ${SDRPP_COMPILER_FLAGS})
+if (WIN32)
+    target_compile_definitions(sdrpp_core PUBLIC NOMINMAX)
+endif ()
 
 # Set the install prefix
 target_compile_definitions(sdrpp_core PUBLIC INSTALL_PREFIX="${CMAKE_INSTALL_PREFIX}")
