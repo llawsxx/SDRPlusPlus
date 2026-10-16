@@ -114,6 +114,20 @@ The device filter matches the core's Airspy, Airspy HF+, HackRF, HydraSDR and
 RTL-SDR VID/PID lists, avoiding permission prompts for unrelated peripherals.
 Authorizing another device does not replace a currently opened SDR connection.
 
+## Baseband recording
+
+**Recorder > Baseband** automatically writes numbered `_part1.wav`, `_part2.wav`,
+etc. files with up to 1 GiB of sample payload each. Uint8, Int16, Int32 and Float32
+remain selectable. Each file is independently playable; the recording duration
+and written size are cumulative across all segments.
+
+An asynchronous writer keeps complete I/Q frames in order across file changes.
+Splitting never stops or resets the SDR, and stopping drains queued samples before
+finalizing the last WAV. The queue is bounded to 32 MiB of Float32 input; storage
+errors, failed segment creation, queue overflow and missing samples stop capture
+with an explicit error rather than silently dropping data. Continuous reception
+still requires adequate USB, CPU and storage performance.
+
 ## Multi-channel operation
 
 New Android configurations default to 200% UI scaling. Existing saved scaling

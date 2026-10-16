@@ -21,6 +21,7 @@
 #include <core.h>
 #include <utils/optionlist.h>
 #include <utils/wav.h>
+#include <utils/wav_capture.h>
 #include <radio_interface.h>
 #include <atomic>
 #include <chrono>
@@ -197,8 +198,11 @@ public:
         std::string vfoName = (recMode == RECORDER_MODE_AUDIO) ? selectedStreamName : "";
         std::string extension = ".wav";
         std::string expandedPath = expandString(folderSelect.path + "/" + genFileName(nameTemplate, recMode, vfoName) + extension);
-        if (!writer.open(expandedPath)) {
-            recordingError = writer.getError();
+        bool opened = recMode == RECORDER_MODE_BASEBAND
+            ? basebandCapture.start(expandedPath.substr(0, expandedPath.size() - extension.size()), samplerate, 2, sampleTypes[sampleTypeId])
+            : writer.open(expandedPath);
+        if (!opened) {
+            recordingError = getRecordingError();
             if (recordingError.empty()) { recordingError = "Cannot create recording file"; }
             core::reportRecordingError(name + ": " + recordingError);
             writer.close();
@@ -253,9 +257,10 @@ public:
         }
 
         // Close file
+        basebandCapture.stop();
         writer.close();
-        if (!writer.getError().empty()) {
-            recordingError = writer.getError();
+        if (!getRecordingError().empty()) {
+            recordingError = getRecordingError();
             core::reportRecordingError(name + ": " + recordingError);
         }
         
@@ -274,7 +279,7 @@ private:
     static void monitorRecording(int, void* context) {
         auto* recorder = static_cast<RecorderModule*>(context);
         if (!recorder->recording) { return; }
-        std::string message = recorder->writer.getError();
+        std::string message = recorder->getRecordingError();
         if (message.empty() && sampleTime() - recorder->lastSampleTime.load() > 5000) {
             message = "No samples received for 5 seconds; recording stopped";
         }
@@ -288,15 +293,20 @@ private:
     static void menuHandler(void* ctx) {
         RecorderModule* _this = (RecorderModule*)ctx;
         float menuWidth = ImGui::GetContentRegionAvail().x;
-        if (_this->recording && !_this->writer.getError().empty()) {
-            _this->recordingError = _this->writer.getError();
+        if (_this->recording && !_this->getRecordingError().empty()) {
+            _this->recordingError = _this->getRecordingError();
             _this->stop(true);
         }
         if (!_this->recordingError.empty()) {
             ImGui::TextColored(ImVec4(1, 0.2f, 0.2f, 1), "%s", _this->recordingError.c_str());
         }
-        ImGui::Text("Written: %.2f MiB", _this->writer.getBytesWritten() / 1048576.0);
-        if (_this->recording && !(_this->ignoreSilence && _this->ignoringSilence) && _this->writer.secondsSinceWrite() > 3.0) {
+        ImGui::Text("Written: %.2f MiB", _this->getRecordedBytes() / 1048576.0);
+        if (_this->recMode == RECORDER_MODE_BASEBAND) {
+            ImGui::Text("Segments: %d (1 GiB each)", _this->basebandCapture.fileCount());
+        }
+        double idleSeconds = _this->recMode == RECORDER_MODE_BASEBAND
+            ? _this->basebandCapture.secondsWithoutProgress() : _this->writer.secondsSinceWrite();
+        if (_this->recording && !(_this->ignoreSilence && _this->ignoringSilence) && idleSeconds > 3.0) {
             ImGui::TextColored(ImVec4(1, 0.2f, 0.2f, 1), "WARNING: recording has not received samples for 3 seconds");
         }
 
@@ -419,7 +429,9 @@ private:
             if (ImGui::Button(CONCAT("Stop##_recorder_rec_", _this->name), ImVec2(menuWidth, 0))) {
                 _this->stop();
             }
-            uint64_t seconds = _this->writer.getSamplesWritten() / _this->samplerate;
+            uint64_t samples = _this->recMode == RECORDER_MODE_BASEBAND
+                ? _this->basebandCapture.samplesWritten() : _this->writer.getSamplesWritten();
+            uint64_t seconds = samples / _this->samplerate;
             time_t diff = seconds;
             tm* dtm = gmtime(&diff);
 
@@ -593,7 +605,7 @@ private:
     static void complexHandler(dsp::complex_t* data, int count, void* ctx) {
         RecorderModule* _this = (RecorderModule*)ctx;
         _this->lastSampleTime.store(sampleTime());
-        _this->writer.write((float*)data, count);
+        _this->basebandCapture.enqueue(reinterpret_cast<float*>(data), count);
     }
 
     static void stereoHandler(dsp::stereo_t* data, int count, void* ctx) {
@@ -671,7 +683,16 @@ private:
     bool recording = false;
     bool tuningHeld = false;
     bool ignoringSilence = false;
+    std::string getRecordingError() {
+        return recMode == RECORDER_MODE_BASEBAND ? basebandCapture.getError() : writer.getError();
+    }
+
+    uint64_t getRecordedBytes() {
+        return recMode == RECORDER_MODE_BASEBAND ? basebandCapture.bytesWritten() : writer.getBytesWritten();
+    }
+
     wav::Writer writer;
+    wav::Capture basebandCapture;
     std::string recordingError;
     EventHandler<int> recordingMonitor;
     std::atomic<int64_t> lastSampleTime{0};
